@@ -1,0 +1,1285 @@
+@import "tailwindcss";
+
+/*
+ * ============================================================================
+ *  SAN AGUSTIN MSWDO — GREEN & YELLOW THEME
+ * ============================================================================
+ *
+ * The portal is themed on the two colours of the municipal seal: a deep
+ * agricultural green and a warm harvest yellow. Rather than rewriting the
+ * colour utility on every one of the twenty-odd Blade templates — which risks
+ * breaking working markup for no functional gain — the palette itself is
+ * redefined here. `bg-teal-600`, `text-teal-700`, `ring-teal-500` and the rest
+ * keep their names and keep working; they simply resolve to green now.
+ *
+ * Two families are remapped:
+ *
+ *   teal-*  →  green   the primary brand colour (sidebar, buttons, links)
+ *   blue-*  →  yellow  the secondary/accent colour (badges, stat cards)
+ *
+ * Green carries every primary action. Yellow is deliberately rationed: it is
+ * an accent and a highlight, never a large flood, because a screen of saturated
+ * yellow is tiring to read for a full working day. Yellow text is always the
+ * darkest steps (700/800/900) so it clears contrast requirements on white —
+ * mid-yellow type on a white background is effectively invisible on the older
+ * monitors this office runs.
+ *
+ * Semantic colours are left alone on purpose: red still means an error, and
+ * amber still means "needs attention". Those meanings are worth more than
+ * palette consistency.
+ */
+@theme {
+    /* --- Primary: green ---------------------------------------------------
+       Named `teal` because that is what the templates already ask for. The
+       values are a green ramp built around #15803d, deepened at the top end so
+       white text on the sidebar stays comfortably readable. */
+    --color-teal-50:  #f0fdf4;
+    --color-teal-100: #dcfce7;
+    --color-teal-200: #bbf7d0;
+    --color-teal-300: #86efac;
+    --color-teal-400: #4ade80;
+    --color-teal-500: #22c55e;
+    --color-teal-600: #16a34a;
+    --color-teal-700: #15803d;
+    --color-teal-800: #166534;
+    --color-teal-900: #14532d;
+    --color-teal-950: #052e16;
+
+    /* Kept as an alias of the same ramp so any `green-*` already in the
+       templates sits in the same family instead of drifting a shade off. */
+    --color-green-50:  #f0fdf4;
+    --color-green-100: #dcfce7;
+    --color-green-200: #bbf7d0;
+    --color-green-300: #86efac;
+    --color-green-400: #4ade80;
+    --color-green-500: #22c55e;
+    --color-green-600: #16a34a;
+    --color-green-700: #15803d;
+    --color-green-800: #166534;
+    --color-green-900: #14532d;
+
+    /* --- Secondary: yellow ------------------------------------------------
+       Named `blue` for the same reason. The dark steps are pushed browner than
+       a pure yellow so that `text-blue-700` on white is still legible type
+       rather than a bright smear. */
+    --color-blue-50:  #fefce8;
+    --color-blue-100: #fef9c3;
+    --color-blue-200: #fef08a;
+    --color-blue-300: #fde047;
+    --color-blue-400: #facc15;
+    --color-blue-500: #eab308;
+    --color-blue-600: #ca8a04;
+    --color-blue-700: #a16207;
+    --color-blue-800: #854d0e;
+    --color-blue-900: #713f12;
+    --color-blue-950: #422006;
+
+    /* --- Tertiary accents -------------------------------------------------
+       `purple` and `rose` appear only in status badges and chart bars. Left as
+       distinguishable hues but pulled toward the green/yellow story so a status
+       column reads as one set rather than a rainbow. */
+    --color-purple-50:  #f7fee7;
+    --color-purple-100: #ecfccb;
+    --color-purple-500: #84cc16;
+    --color-purple-600: #65a30d;
+    --color-purple-700: #4d7c0f;
+    --color-purple-800: #3f6212;
+
+    /* Brand tokens for hand-written CSS and inline styles further down. */
+    --color-brand-green:      #15803d;
+    --color-brand-green-deep: #14532d;
+    --color-brand-green-soft: #f0fdf4;
+    --color-brand-yellow:     #eab308;
+    --color-brand-yellow-deep:#a16207;
+
+    /* --- Surfaces ---------------------------------------------------------
+       A warm off-white ground rather than a cold grey. White cards lift off
+       it cleanly, and it stops a screen of tables reading as a spreadsheet.
+       The canvas is very slightly warm; the sidebar is a shade lighter again
+       so the two read as separate planes without needing a hard border. */
+    --color-brand-canvas:     #faf8f3;
+    --color-brand-surface:    #ffffff;
+    --color-brand-rail:       #fdfcf9;
+    --color-brand-line:       #ece7dc;
+}
+
+/*
+ * Sized for the people who use this daily: municipal staff in their 50s and
+ * 60s, often on older monitors. Body text is 16px rather than the 14px that
+ * reads as "modern dashboard", copy is near-black instead of grey, and every
+ * control clears a 44px click target.
+ */
+@layer base {
+    body { color: #111827; font-size: 1rem; }
+    input, select, textarea { transition: border-color 150ms ease, box-shadow 150ms ease; }
+    button, a { -webkit-tap-highlight-color: transparent; }
+
+    /* Headings tightened up a little. At the default tracking, a bold 24px
+       heading beside 16px body copy reads as loose rather than deliberate. */
+    h1, h2, h3 { letter-spacing: -0.011em; }
+
+    /* Scrollbars, themed. The main content area scrolls on every page, so the
+       default grey bar is one of the most-seen elements in the portal. */
+    * { scrollbar-color: #d8d1c1 transparent; scrollbar-width: thin; }
+    ::-webkit-scrollbar { width: 10px; height: 10px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb {
+        border: 2px solid transparent;
+        border-radius: 9999px;
+        background-clip: padding-box;
+        background-color: #d8d1c1;
+    }
+    ::-webkit-scrollbar-thumb:hover { background-color: #86b894; }
+
+    /* One selection colour across the portal, in the brand green rather than
+       the browser's default blue. */
+    ::selection { background: #bbf7d0; color: #14532d; }
+}
+
+@layer components {
+    .form-label {
+        display:block; margin-bottom:.5rem; color:#3f6212;
+        font-size:.8125rem; font-weight:700; letter-spacing:.03em; text-transform:uppercase;
+    }
+    .form-control {
+        width:100%; border:1px solid #e0dace; border-radius:.75rem; background:#fdfcfa;
+        padding:.75rem .875rem; color:#111827; font-size:1rem; outline:none;
+    }
+    .form-control:hover { border-color:#c9c0ac; background:#fff; }
+    /* A thick, high-contrast focus ring: the most useful affordance there is for
+       someone tabbing through a long form on a washed-out monitor. Now green,
+       with a yellow outer halo so the focused field is findable at a glance
+       even by someone who does not distinguish the two hues. */
+    .form-control:focus {
+        border-color:#15803d;
+        background:#fff;
+        box-shadow:0 0 0 3px rgba(21,128,61,.18), 0 0 0 6px rgba(234,179,8,.14);
+    }
+    .form-error { margin-top:.375rem; color:#b91c1c; font-size:.875rem; font-weight:600; }
+
+    .btn-primary, .btn-secondary, .btn-danger {
+        display:inline-flex; align-items:center; justify-content:center; gap:.5rem;
+        border-radius:.625rem; padding:.75rem 1.25rem; font-size:1rem; font-weight:700;
+        transition:background-color 150ms ease, border-color 150ms ease,
+                   box-shadow 150ms ease, transform 150ms ease;
+    }
+    /* The primary button carries the brand: a green gradient with a thin
+       yellow underline, so the one control that commits a change is the most
+       distinct thing on the page. */
+    .btn-primary {
+        position:relative; overflow:hidden;
+        border:1px solid #15803d;
+        background:linear-gradient(135deg, #16a34a, #15803d);
+        color:#fff; box-shadow:0 2px 6px rgba(21,128,61,.24);
+    }
+    .btn-primary::after {
+        content:""; position:absolute; inset:auto 0 0 0; height:2px;
+        background:linear-gradient(90deg, #facc15, #eab308);
+        opacity:.85;
+    }
+    .btn-primary:hover {
+        background:linear-gradient(135deg, #15803d, #166534);
+        box-shadow:0 6px 16px rgba(21,128,61,.30);
+        transform:translateY(-1px);
+    }
+    .btn-primary:active { transform:translateY(0); box-shadow:0 2px 6px rgba(21,128,61,.24); }
+
+    .btn-secondary { border:1px solid #b5c9b8; background:#fff; color:#166534; }
+    .btn-secondary:hover { background:#f0fdf4; border-color:#86b894; }
+
+    .btn-danger { border:1px solid #b91c1c; background:#b91c1c; color:#fff; }
+    .btn-danger:hover { background:#991b1b; }
+
+    .btn-primary:focus-visible, .btn-secondary:focus-visible, .btn-danger:focus-visible {
+        outline:3px solid #eab308; outline-offset:2px;
+    }
+
+    /* Disabled controls must read as unavailable rather than merely faint —
+       a view-only user meets these on every page. */
+    .btn-primary:disabled, .btn-secondary:disabled, .btn-danger:disabled {
+        opacity:.55; cursor:not-allowed; transform:none; box-shadow:none;
+    }
+
+    /*
+     * Card surface. The templates already write out the
+     * `bg-white rounded-xl border border-gray-200` combination by hand on every
+     * panel; this softens the border to a green-tinted grey and adds a shadow,
+     * applied through an attribute selector so no markup has to change.
+     */
+    .app-shell [class*="rounded-xl"].border-gray-200,
+    .app-shell [class*="rounded-2xl"].border-gray-200 {
+        border-color: var(--color-brand-line);
+        border-radius: 1.25rem;
+        box-shadow: 0 1px 2px rgba(60,50,30,.04), 0 12px 32px -16px rgba(60,50,30,.16);
+    }
+
+    /* Column headings sit on the card ground with a rule under them rather
+       than in a grey band. It reads lighter, and keeps the eye on the rows. */
+    .app-shell thead.bg-gray-50 { background: transparent; }
+    .app-shell thead.bg-gray-50 th {
+        color: #8a7f6a;
+        border-bottom: 1px solid #f2eee5;
+        font-weight: 600;
+        letter-spacing: .02em;
+        text-transform: none;
+        font-size: .8125rem;
+        padding-top: .875rem;
+        padding-bottom: .875rem;
+    }
+
+    /* Row separators, warm rather than blue-grey. */
+    .app-shell tbody.divide-y > tr { border-color: #f5f1e8; }
+
+    /* Row hover, in the faintest green — it reads as "this is the row you are
+       on" rather than as a rendering artefact. */
+    .app-shell tbody tr.hover\:bg-gray-50:hover,
+    .app-shell tbody tr.hover\:bg-teal-50\/50:hover { background: #f5faf5; }
+
+    /* ========================================================================
+     *  SHARED PIECES
+     * ========================================================================
+     * The templates repeat the same three or four shapes — a panel, a panel
+     * heading, a toolbar, a soft action button. Naming them here means one
+     * definition instead of a long utility string copied per page, and it is
+     * what lets every list in the portal look like the same list.
+     */
+
+    /* Panel: the white card almost every page is built from. A generous
+       radius and a soft, wide shadow — the card should feel like it is
+       resting on the canvas rather than boxed in by a border. */
+    .panel {
+        overflow: hidden;
+        border: 1px solid var(--color-brand-line);
+        border-radius: 1.25rem;
+        background: var(--color-brand-surface);
+        box-shadow: 0 1px 2px rgba(60,50,30,.04), 0 12px 32px -16px rgba(60,50,30,.16);
+    }
+
+    /* The bar across the top of a panel, holding its title and controls. */
+    .panel-head {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: .75rem;
+        padding: 1.125rem 1.375rem;
+        border-bottom: 1px solid #f2eee5;
+    }
+
+    /* Panel titles carry a short green tick to their left. It gives every
+       heading in the portal the same anchor point, which is what makes a page
+       of stacked panels scan as a list rather than as loose blocks. */
+    .panel-title {
+        display: flex;
+        align-items: center;
+        gap: .5rem;
+        margin: 0;
+        color: #1f2937;
+        font-size: .9375rem;
+        font-weight: 700;
+    }
+    .panel-title::before {
+        content: "";
+        width: 4px;
+        height: 1.05rem;
+        border-radius: 9999px;
+        background: #15803d;
+        flex: 0 0 auto;
+    }
+    /* Yellow variant, for the second panel in a pair. */
+    .panel-title.is-accent::before { background: #eab308; }
+
+    /* A filter/search strip. Tinted just enough to separate the controls from
+       the data below without becoming another band of colour. */
+    .toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: flex-end;
+        gap: .75rem;
+        padding: 1.125rem 1.375rem;
+        border-bottom: 1px solid #f2eee5;
+    }
+
+    /* Soft buttons — the row-level View/Edit controls. Same size and shape
+       across every table so the action column is in the same place and reads
+       the same way wherever it appears. */
+    .btn-soft, .btn-soft-plain, .btn-soft-danger {
+        display: inline-flex;
+        align-items: center;
+        gap: .375rem;
+        border-radius: .5rem;
+        padding: .5rem .75rem;
+        font-size: .875rem;
+        font-weight: 600;
+        white-space: nowrap;
+        transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease;
+    }
+    .btn-soft { border: 1px solid #bbf7d0; background: #f0fdf4; color: #166534; }
+    .btn-soft:hover { background: #dcfce7; border-color: #86efac; }
+
+    .btn-soft-plain { border: 1px solid #e5e7eb; background: #f9fafb; color: #374151; }
+    .btn-soft-plain:hover { background: #f3f4f6; border-color: #d1d5db; }
+
+    .btn-soft-danger { border: 1px solid #fecaca; background: #fef2f2; color: #b91c1c; }
+    .btn-soft-danger:hover { background: #fee2e2; border-color: #fca5a5; }
+
+    .btn-soft:focus-visible,
+    .btn-soft-plain:focus-visible,
+    .btn-soft-danger:focus-visible { outline: 2px solid #15803d; outline-offset: 2px; }
+
+    /* Status and count pills. */
+    .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: .25rem;
+        border-radius: 9999px;
+        padding: .25rem .625rem;
+        font-size: .75rem;
+        font-weight: 700;
+        white-space: nowrap;
+        box-shadow: inset 0 0 0 1px currentColor;
+    }
+    /* The ring is drawn from currentColor at low opacity, so a pill needs only
+       a background and a text colour to be complete. */
+    .pill { box-shadow: inset 0 0 0 1px color-mix(in srgb, currentColor 30%, transparent); }
+
+    /* Empty states. Every list has one, and they were four different shapes. */
+    .empty-state {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: .5rem;
+        padding: 3rem 1rem;
+        text-align: center;
+    }
+    .empty-state svg { width: 2.75rem; height: 2.75rem; color: #cbe6d2; }
+    .empty-state p { margin: 0; color: #6b7280; font-size: .9375rem; font-weight: 600; }
+
+    /* Definition lists on the detail pages: label above value, quiet label. */
+    .detail-label {
+        margin: 0;
+        color: #6b7280;
+        font-size: .6875rem;
+        font-weight: 700;
+        letter-spacing: .04em;
+        text-transform: uppercase;
+    }
+    .detail-value { margin: .25rem 0 0; color: #111827; font-size: 1rem; }
+
+    /* ========================================================================
+     *  SIDEBAR
+     * ========================================================================
+     * A light rail rather than a dark slab. With the navigation on a pale
+     * ground, green stops being the background and becomes what marks the page
+     * you are on — which is the one thing the sidebar has to communicate.
+     */
+    .rail {
+        display: flex;
+        flex-direction: column;
+        background: var(--color-brand-rail);
+        border-right: 1px solid var(--color-brand-line);
+    }
+
+    /* Brand block at the top. */
+    .rail-brand {
+        display: flex;
+        align-items: center;
+        gap: .75rem;
+        padding: 1.25rem 1.125rem;
+    }
+    /* The municipal seal. It is a circular device on a white field, so it is
+       given a white disc of its own rather than being dropped straight onto
+       the cream rail, where its own background would read as a smudge. */
+    .rail-seal {
+        width: 2.5rem;
+        height: 2.5rem;
+        flex: 0 0 auto;
+        border-radius: 9999px;
+        object-fit: contain;
+        background: #fff;
+        box-shadow: 0 0 0 1px var(--color-brand-line), 0 4px 10px -4px rgba(60,50,30,.28);
+    }
+
+    /* Section headings — "Main menu", "Reports", "Help & settings". */
+    .rail-section {
+        margin: .875rem 0 .375rem;
+        padding: 0 1.125rem;
+        color: #a89e88;
+        font-size: .6875rem;
+        font-weight: 700;
+        letter-spacing: .08em;
+        text-transform: uppercase;
+    }
+
+    /* Navigation links. */
+    .rail-link {
+        position: relative;
+        display: flex;
+        align-items: center;
+        gap: .75rem;
+        margin: 0 .625rem;
+        padding: .625rem .75rem;
+        border-radius: .75rem;
+        color: #5c5546;
+        font-size: .9375rem;
+        font-weight: 600;
+        transition: background-color 150ms ease, color 150ms ease;
+    }
+    .rail-link svg { width: 1.25rem; height: 1.25rem; flex: 0 0 auto; color: #a89e88; transition: color 150ms ease; }
+    .rail-link:hover { background: #f4f1e9; color: #1f2937; }
+    .rail-link:hover svg { color: #15803d; }
+
+    /* The current page: a soft green plate, green type, and a yellow bar on
+       the leading edge. Three signals, so it does not rest on colour alone. */
+    .rail-link.is-active {
+        background: #eefaf1;
+        color: #14532d;
+        font-weight: 700;
+    }
+    .rail-link.is-active svg { color: #15803d; }
+    .rail-link.is-active::before {
+        content: "";
+        position: absolute;
+        left: -.625rem;
+        top: 50%;
+        width: 3px;
+        height: 1.5rem;
+        transform: translateY(-50%);
+        border-radius: 0 9999px 9999px 0;
+        background: #eab308;
+    }
+    .rail-link:focus-visible { outline: 2px solid #15803d; outline-offset: 1px; }
+
+    /* Signed-in user, pinned to the bottom of the rail. */
+    .rail-user {
+        display: flex;
+        align-items: center;
+        gap: .625rem;
+        margin: .625rem;
+        padding: .625rem;
+        border-radius: .875rem;
+        background: #f4f1e9;
+    }
+    .rail-avatar {
+        display: grid;
+        place-items: center;
+        width: 2.25rem;
+        height: 2.25rem;
+        flex: 0 0 auto;
+        border-radius: 9999px;
+        background: linear-gradient(135deg, #16a34a, #15803d);
+        color: #fff;
+        font-size: .8125rem;
+        font-weight: 800;
+    }
+
+    /* ========================================================================
+     *  TOPBAR
+     * ======================================================================== */
+    .topbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        flex-shrink: 0;
+        padding: .875rem 1.5rem;
+        background: var(--color-brand-canvas);
+        border-bottom: 1px solid var(--color-brand-line);
+    }
+
+    /* Breadcrumb under the page title. */
+    .crumbs {
+        display: flex;
+        align-items: center;
+        gap: .375rem;
+        margin: .125rem 0 0;
+        color: #a89e88;
+        font-size: .8125rem;
+        font-weight: 500;
+    }
+    .crumbs a { color: #8a7f6a; }
+    .crumbs a:hover { color: #15803d; }
+    .crumbs .sep { color: #cfc6b2; }
+    .crumbs .current { color: #5c5546; font-weight: 600; }
+
+    /* Icon button in the topbar (the user menu trigger). */
+    .icon-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: .5rem;
+        padding: .375rem .75rem .375rem .375rem;
+        border: 1px solid var(--color-brand-line);
+        border-radius: 9999px;
+        background: #fff;
+        color: #3f3a30;
+        font-size: .875rem;
+        font-weight: 600;
+        transition: border-color 150ms ease, background-color 150ms ease;
+    }
+    .icon-btn:hover { border-color: #c9c0ac; background: #fdfcfa; }
+    .icon-btn:focus-visible { outline: 2px solid #15803d; outline-offset: 2px; }
+}
+
+@media (max-width: 640px) {
+    table { min-width: 680px; }
+}
+
+/*
+ * Laravel's paginator renders its own markup, which ships blue by default and
+ * would be the one blue element left in the portal.
+ */
+.app-shell nav[role="navigation"] a:hover { color:#15803d; }
+.app-shell nav[role="navigation"] span[aria-current="page"] span {
+    background:#15803d !important;
+    border-color:#15803d !important;
+    color:#fff !important;
+}
+
+/*
+ * SweetAlert, resized to match the rest of the portal. The library's defaults
+ * are built for consumer sites and read small next to 16px body copy, so the
+ * title, message and buttons are all stepped up here.
+ */
+.swal-portal {
+    border-radius: 1.125rem;
+    padding: 1.75rem 1.5rem;
+    /* A yellow hairline along the top edge, so a dialog is recognisably part
+       of this portal rather than a generic library popup. */
+    border-top: 3px solid #eab308;
+    box-shadow: 0 24px 60px -12px rgba(20, 83, 45, .28);
+}
+/* The library parks its close button hard against the popup's top-right
+   corner, where it collides with the status pill and the yellow hairline.
+   Pulling it inside the padding box gives it room of its own. */
+.swal-portal .swal2-close {
+    position: absolute;
+    top: .625rem;
+    right: .625rem;
+    width: 2rem;
+    height: 2rem;
+    margin: 0;
+    border-radius: .5rem;
+    font-size: 1.75rem;
+    line-height: 1;
+    color: #94a3b8;
+    transition: background-color .15s, color .15s;
+}
+.swal-portal .swal2-close:hover { background: #f1f5f9; color: #0f172a; }
+.swal-portal .swal2-close:focus-visible {
+    outline: 3px solid #eab308;
+    outline-offset: 2px;
+    box-shadow: none;
+}
+
+.swal-portal-title { color: #14532d; font-size: 1.375rem; font-weight: 800; }
+.swal-portal-body { color: #374151; font-size: 1rem; line-height: 1.6; }
+.swal-portal-confirm,
+.swal-portal-cancel {
+    border-radius: .625rem; padding: .75rem 1.5rem;
+    font-size: 1rem; font-weight: 700;
+}
+/* Match the focus treatment used by the portal's own buttons. */
+.swal-portal-confirm:focus-visible,
+.swal-portal-cancel:focus-visible { outline: 3px solid #eab308; outline-offset: 2px; }
+
+.swal-portal-toast { font-size: .975rem; }
+.swal-portal-toast .swal2-title { font-size: .975rem; font-weight: 700; color: #14532d; }
+
+/* SweetAlert's own inputs otherwise keep the library's blue focus ring, which
+   is the one blue left inside an otherwise green dialog. */
+.swal2-input:focus, .swal2-select:focus, .swal2-textarea:focus {
+    border-color: #15803d !important;
+    box-shadow: 0 0 0 3px rgba(21,128,61,.20) !important;
+}
+
+/* ============================================================================
+ *  LOGIN SCREEN
+ * ============================================================================
+ * The first thing anyone sees, and for most staff the only page they meet
+ * before the portal proper — so it carries the identity most explicitly: the
+ * municipal seal, a deep green field, and the same warm paper the portal uses
+ * behind the form itself.
+ *
+ * Two panes on a desktop: the photograph and the municipal wording on the
+ * left, the form on the right. Below 860px the photograph becomes a backdrop
+ * and the form floats on top of it, because a hero image stacked above a login
+ * form just pushes the fields off the screen on a phone.
+ */
+:root {
+    --auth-ink: #1c2b20;
+    --auth-muted: #6b7a6f;
+    --auth-line: #e4ddd0;
+    --auth-green: #15803d;
+    --auth-green-deep: #0d3b1e;
+    --auth-green-mid: #166534;
+    --auth-gold: #eab308;
+    --auth-gold-light: #fde047;
+    --auth-paper: #faf8f3;
+    --auth-white: #ffffff;
+    --auth-danger: #b91c1c;
+    --auth-shadow: 0 32px 80px -24px rgba(13, 59, 30, 0.45);
+}
+
+.auth-page {
+    margin: 0;
+    min-height: 100vh;
+    color: var(--auth-ink);
+    background: var(--auth-green-deep);
+    font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif;
+}
+
+.auth-page *,
+.auth-page *::before,
+.auth-page *::after {
+    box-sizing: border-box;
+}
+
+.auth-shell {
+    min-height: 100vh;
+    display: grid;
+    grid-template-columns: minmax(0, 1.1fr) minmax(430px, 0.9fr);
+}
+
+/* ---- Left: photograph, seal and municipal wording ---------------------- */
+
+.auth-visual {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    overflow: hidden;
+    background-position: center;
+    background-size: cover;
+}
+
+/* Darkened enough that white text sits on it comfortably, and graded so the
+   copy at the bottom has the most cover. */
+.auth-visual::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background:
+        linear-gradient(180deg, rgba(13, 59, 30, 0.62) 0%, rgba(13, 59, 30, 0.72) 45%, rgba(13, 59, 30, 0.94) 100%);
+}
+
+/* A faint grid, which keeps a large flat photograph from reading as a blur. */
+.auth-visual__shade {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    background-image:
+        linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+    background-size: 52px 52px;
+    opacity: 0.5;
+}
+
+/* The yellow seam down the inside edge — the one place the accent runs at
+   full length, and the join between the two panes. */
+.auth-visual::before {
+    content: "";
+    position: absolute;
+    inset: 0 0 0 auto;
+    z-index: 3;
+    width: 5px;
+    background: linear-gradient(180deg, var(--auth-gold-light), var(--auth-gold) 40%, var(--auth-green));
+}
+
+.auth-brand,
+.auth-visual__content {
+    position: relative;
+    z-index: 2;
+}
+
+.auth-brand {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 40px;
+    color: var(--auth-white);
+}
+
+/* The seal, on its own white disc. It is a circular device drawn on white, so
+   without the disc its own background reads as a grey square on the photo. */
+.auth-seal {
+    width: 62px;
+    height: 62px;
+    flex: 0 0 auto;
+    padding: 4px;
+    border-radius: 9999px;
+    object-fit: contain;
+    background: var(--auth-white);
+    box-shadow: 0 0 0 3px rgba(250, 204, 21, 0.5), 0 14px 34px rgba(0, 0, 0, 0.3);
+}
+
+.auth-kicker,
+.auth-eyebrow {
+    margin: 0;
+    color: var(--auth-gold-light);
+    font-size: 0.72rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.09em;
+}
+
+.auth-brand h1 {
+    margin: 4px 0 0;
+    color: var(--auth-white);
+    font-size: 1.1rem;
+    line-height: 1.25;
+    font-weight: 800;
+}
+
+.auth-visual__content {
+    width: min(660px, 100%);
+    padding: 40px;
+    color: var(--auth-white);
+}
+
+.auth-visual__content h2 {
+    margin: 14px 0 16px;
+    max-width: 620px;
+    font-size: clamp(2.1rem, 3.4vw, 3rem);
+    line-height: 1.06;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+}
+
+.auth-visual__content p {
+    margin: 0;
+    max-width: 520px;
+    color: rgba(255, 255, 255, 0.82);
+    font-size: 1.02rem;
+    line-height: 1.7;
+}
+
+.auth-metrics {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+    margin-top: 32px;
+    max-width: 560px;
+}
+
+.auth-metrics div {
+    min-width: 0;
+    padding: 16px;
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    /* A yellow tab on the leading edge: enough accent to read as branded,
+       not enough to compete with the headline above. */
+    border-left: 3px solid rgba(250, 204, 21, 0.8);
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(16px);
+}
+
+.auth-metrics strong,
+.auth-metrics span {
+    display: block;
+}
+
+.auth-metrics strong {
+    color: var(--auth-gold-light);
+    font-size: 1.5rem;
+    line-height: 1;
+    font-weight: 800;
+}
+
+.auth-metrics span {
+    margin-top: 6px;
+    color: rgba(255, 255, 255, 0.72);
+    font-size: 0.78rem;
+    font-weight: 500;
+}
+
+/* ---- Right: the form -------------------------------------------------- */
+
+.auth-panel {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    background: var(--auth-paper);
+}
+
+.auth-panel__header,
+.auth-panel__footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 26px 40px;
+    color: var(--auth-muted);
+    font-size: 0.74rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+}
+
+.auth-panel__header p,
+.auth-panel__header span,
+.auth-panel__footer span {
+    margin: 0;
+}
+
+/* "Authorized access" reads as a status, so it gets a chip and the green. */
+.auth-panel__header span {
+    padding: 5px 12px;
+    border-radius: 9999px;
+    background: rgba(21, 128, 61, 0.09);
+    color: var(--auth-green);
+    letter-spacing: 0.05em;
+}
+
+.auth-form-wrap {
+    width: min(100%, 452px);
+    margin: 0 auto;
+    padding: 12px 40px 32px;
+}
+
+.auth-mobile-brand {
+    display: none;
+}
+
+.auth-copy {
+    margin-bottom: 28px;
+}
+
+/* The eyebrow is yellow over the dark photograph, but this one sits on the
+   pale form panel, where yellow type would be unreadable. Green instead. */
+.auth-copy .auth-eyebrow {
+    color: var(--auth-green);
+}
+
+.auth-copy h2 {
+    margin: 10px 0 10px;
+    color: var(--auth-ink);
+    font-size: 2.1rem;
+    line-height: 1.12;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+}
+
+.auth-copy > p:last-child {
+    margin: 0;
+    color: var(--auth-muted);
+    font-size: 1rem;
+    line-height: 1.6;
+}
+
+.auth-form {
+    display: grid;
+    gap: 20px;
+}
+
+.auth-field {
+    display: grid;
+    gap: 8px;
+}
+
+.auth-field > span {
+    color: #3f4a42;
+    font-size: 0.78rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.auth-field small {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--auth-danger);
+    font-size: 0.82rem;
+    font-weight: 600;
+    line-height: 1.4;
+}
+
+.auth-input-wrap {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 54px;
+    padding: 0 15px;
+    border: 1px solid var(--auth-line);
+    border-radius: 12px;
+    background: var(--auth-white);
+    transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.auth-input-wrap:focus-within {
+    border-color: var(--auth-green);
+    box-shadow:
+        0 0 0 3px rgba(21, 128, 61, 0.15),
+        0 0 0 6px rgba(234, 179, 8, 0.13);
+}
+
+.auth-input-wrap.is-invalid {
+    border-color: rgba(185, 28, 28, 0.75);
+    box-shadow: 0 0 0 3px rgba(185, 28, 28, 0.1);
+}
+
+.auth-input-wrap svg {
+    width: 20px;
+    height: 20px;
+    flex: 0 0 auto;
+    color: var(--auth-green);
+}
+
+.auth-input-wrap input {
+    width: 100%;
+    min-width: 0;
+    border: 0;
+    outline: 0;
+    background: transparent;
+    color: var(--auth-ink);
+    font-size: 1rem;
+}
+
+.auth-input-wrap input::placeholder {
+    color: #a0aca4;
+}
+
+/* The show/hide password control. */
+.auth-reveal {
+    display: grid;
+    place-items: center;
+    flex: 0 0 auto;
+    padding: 6px;
+    border: 0;
+    border-radius: 8px;
+    background: none;
+    color: var(--auth-muted);
+    cursor: pointer;
+    transition: color 150ms ease, background-color 150ms ease;
+}
+
+.auth-reveal:hover {
+    background: rgba(21, 128, 61, 0.08);
+    color: var(--auth-green);
+}
+
+.auth-reveal:focus-visible {
+    outline: 2px solid var(--auth-green);
+    outline-offset: 1px;
+}
+
+.auth-reveal svg {
+    width: 20px;
+    height: 20px;
+    color: inherit;
+}
+
+.auth-options {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    color: var(--auth-muted);
+    font-size: 0.85rem;
+}
+
+.auth-check {
+    display: inline-flex;
+    align-items: center;
+    gap: 9px;
+    min-width: 0;
+    cursor: pointer;
+    font-weight: 500;
+}
+
+.auth-check input {
+    width: 17px;
+    height: 17px;
+    flex: 0 0 auto;
+    accent-color: var(--auth-green);
+}
+
+.auth-check span {
+    overflow-wrap: anywhere;
+}
+
+.auth-submit {
+    position: relative;
+    overflow: hidden;
+    width: 100%;
+    min-height: 56px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    border: 0;
+    border-radius: 12px;
+    color: var(--auth-white);
+    background: linear-gradient(135deg, var(--auth-green-mid), #16a34a);
+    box-shadow: 0 16px 32px -12px rgba(21, 128, 61, 0.6);
+    cursor: pointer;
+    font-size: 0.92rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    transition: transform 160ms ease, box-shadow 160ms ease, filter 160ms ease;
+}
+
+/* The yellow underline that marks every primary action in the portal. */
+.auth-submit::after {
+    content: "";
+    position: absolute;
+    inset: auto 0 0 0;
+    height: 3px;
+    background: linear-gradient(90deg, var(--auth-gold-light), var(--auth-gold));
+}
+
+.auth-submit:hover {
+    transform: translateY(-1px);
+    filter: saturate(1.06);
+    box-shadow: 0 20px 40px -12px rgba(21, 128, 61, 0.65);
+}
+
+.auth-submit:active {
+    transform: translateY(0);
+}
+
+.auth-submit:focus-visible {
+    outline: 3px solid var(--auth-gold);
+    outline-offset: 3px;
+}
+
+.auth-submit svg {
+    width: 19px;
+    height: 19px;
+}
+
+/* A quiet note under the form: who to ask when the password does not work.
+   Without it the only route is to guess, and a locked-out clerk has no idea
+   the administrator can reset it. */
+.auth-help {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    margin-top: 24px;
+    padding: 14px 16px;
+    border: 1px solid var(--auth-line);
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.7);
+    color: var(--auth-muted);
+    font-size: 0.85rem;
+    line-height: 1.5;
+}
+
+.auth-help svg {
+    width: 18px;
+    height: 18px;
+    flex: 0 0 auto;
+    margin-top: 1px;
+    color: var(--auth-green);
+}
+
+/* ---- Responsive -------------------------------------------------------- */
+
+@media (max-width: 1100px) {
+    .auth-shell {
+        grid-template-columns: minmax(0, 0.9fr) minmax(400px, 0.95fr);
+    }
+
+    .auth-brand,
+    .auth-visual__content {
+        padding: 30px;
+    }
+
+    .auth-metrics {
+        grid-template-columns: 1fr;
+        max-width: 300px;
+    }
+
+    .auth-panel__header,
+    .auth-panel__footer {
+        padding: 22px 28px;
+    }
+
+    .auth-form-wrap {
+        padding: 12px 28px 28px;
+    }
+}
+
+@media (max-width: 860px) {
+    /* The photograph becomes the backdrop; the form floats on it. Stacking the
+       hero above the form would push the fields off a phone screen. */
+    .auth-shell {
+        display: block;
+        padding: 16px;
+        background-image: url("/images/mswdo-login-hero.png");
+        background-position: center;
+        background-size: cover;
+        background-attachment: fixed;
+    }
+
+    .auth-shell::before {
+        content: "";
+        position: fixed;
+        inset: 0;
+        background: rgba(13, 59, 30, 0.7);
+        pointer-events: none;
+    }
+
+    .auth-visual {
+        display: none;
+    }
+
+    .auth-panel {
+        position: relative;
+        min-height: calc(100vh - 32px);
+        border: 1px solid rgba(255, 255, 255, 0.55);
+        border-radius: 20px;
+        background: rgba(250, 248, 243, 0.96);
+        backdrop-filter: blur(20px);
+        box-shadow: var(--auth-shadow);
+    }
+
+    .auth-mobile-brand {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        margin-bottom: 26px;
+    }
+
+    .auth-mobile-brand .auth-seal {
+        width: 52px;
+        height: 52px;
+        box-shadow: 0 0 0 2px rgba(234, 179, 8, 0.4);
+    }
+
+    .auth-mobile-brand p {
+        margin: 0 0 2px;
+        color: var(--auth-muted);
+        font-size: 0.72rem;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+    }
+
+    .auth-mobile-brand strong {
+        color: var(--auth-ink);
+        font-size: 1.02rem;
+    }
+}
+
+@media (max-width: 560px) {
+    .auth-shell {
+        padding: 8px;
+    }
+
+    .auth-panel {
+        min-height: calc(100vh - 16px);
+        border-radius: 16px;
+    }
+
+    .auth-panel__header,
+    .auth-panel__footer {
+        padding: 18px 20px;
+    }
+
+    .auth-panel__header {
+        align-items: flex-start;
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .auth-form-wrap {
+        padding: 8px 20px 24px;
+    }
+
+    .auth-copy h2 {
+        font-size: 1.75rem;
+    }
+
+    .auth-options {
+        align-items: flex-start;
+        flex-direction: column;
+        gap: 10px;
+    }
+}
+
+/*
+   Print: Export PDF on the Reports page calls window.print(). Without these
+   rules the browser prints the entire page - sidebar, topbar, filter bar,
+   budget chart and audit log - when the only thing wanted is the report table.
+
+   An element marked [data-print-area] becomes the sole printed content. The
+   app shell uses h-screen + overflow-hidden, which clips print output to a
+   single screen, so those constraints are lifted here as well.
+*/
+@media print {
+    [data-print-hide] {
+        display: none !important;
+    }
+
+    /* Carries Tailwind's `hidden` on screen; revealed only on paper. */
+    [data-print-only] {
+        display: block !important;
+    }
+
+    /* Unlock the scroll containers so long tables paginate across pages
+       instead of being cut off at the first screenful. */
+    html,
+    body,
+    .app-shell,
+    .app-shell *,
+    main {
+        height: auto !important;
+        max-height: none !important;
+        overflow: visible !important;
+    }
+
+    body {
+        background: #fff !important;
+    }
+
+    /* Lift the report panel out of the flex/grid layout so it occupies the
+       full sheet rather than the two-thirds column it sits in on screen. */
+    [data-print-area] {
+        position: absolute !important;
+        left: 0 !important;
+        top: 0 !important;
+        width: 100% !important;
+        margin: 0 !important;
+        border: 0 !important;
+        border-radius: 0 !important;
+        box-shadow: none !important;
+    }
+
+    /* Keep rows intact across page breaks and repeat the header on each sheet. */
+    [data-print-area] table {
+        width: 100% !important;
+    }
+
+    [data-print-area] thead {
+        display: table-header-group;
+    }
+
+    [data-print-area] tr {
+        break-inside: avoid;
+        page-break-inside: avoid;
+    }
+
+    /* Tailwind's colour utilities are often dropped by print colour management;
+       force the report text to solid black so nothing prints washed out. */
+    [data-print-area],
+    [data-print-area] * {
+        color: #000 !important;
+    }
+
+    [data-print-area] thead th {
+        background: #f1f5f9 !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+
+    [data-print-area] td,
+    [data-print-area] th {
+        border-bottom: 1px solid #cbd5e1 !important;
+    }
+
+    @page {
+        margin: 14mm;
+    }
+}
