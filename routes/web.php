@@ -64,6 +64,15 @@ Route::middleware(['auth', 'active', 'notviewonly'])->prefix('mswdo')->name('msw
         ->only(['index', 'store', 'show', 'update', 'destroy'])
         ->middleware('module:budget');
 
+    // Named portions of a budget — "College", "TUPAD", "School Supplies".
+    // Nested under the budget they belong to so the parent is always in hand.
+    Route::middleware('module:budget')->group(function () {
+        Route::post('/budget/{budget}/sub-allocations', [BudgetController::class, 'storeSubAllocation'])
+            ->name('budget.sub-allocations.store');
+        Route::delete('/budget/{budget}/sub-allocations/{subAllocation}', [BudgetController::class, 'destroySubAllocation'])
+            ->name('budget.sub-allocations.destroy');
+    });
+
     // Reports
     Route::middleware('module:reports')->group(function () {
         Route::get('/reports', [ReportController::class, 'index'])->name('reports.index');

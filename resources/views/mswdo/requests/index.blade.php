@@ -35,12 +35,17 @@
                                  'Approved' => 'Approved', 'Rejected' => 'Rejected',
                                  'For Release' => 'For Release', 'Released' => 'Released'];
                     $current  = request('status', '');
+                    $currentBarangay = request('barangay', '');
                 @endphp
                 @foreach ($statuses as $s)
                     {{-- The selected filter is marked by weight and a ring as
                          well as by fill, so it stays obvious which subset of
-                         the table is on screen. --}}
-                    <a href="{{ route('mswdo.requests.index', $s ? ['status' => $s] : []) }}"
+                         the table is on screen. The barangay is carried along,
+                         so changing status keeps the place you were looking at. --}}
+                    <a href="{{ route('mswdo.requests.index', array_filter([
+                            'status'   => $s,
+                            'barangay' => $currentBarangay,
+                       ])) }}"
                        @if($current === $s) aria-current="true" @endif
                        class="inline-flex items-center px-3.5 py-1.5 rounded-full text-xs transition-all duration-150
                               {{ $current === $s
@@ -50,6 +55,28 @@
                     </a>
                 @endforeach
             </div>
+
+            {{-- Barangay. "All barangays" is the default, so the page opens on
+                 the whole municipality and narrows only when asked. --}}
+            <form method="GET" action="{{ route('mswdo.requests.index') }}" class="flex flex-wrap items-center gap-2">
+                <input type="hidden" name="status" value="{{ $current }}">
+                <label for="req-barangay" class="text-xs font-bold uppercase tracking-wide text-gray-500 whitespace-nowrap">
+                    Barangay
+                </label>
+                <select id="req-barangay" name="barangay" onchange="this.form.submit()"
+                        class="rounded-xl border border-[#ece7dc] bg-white px-3 py-1.5 text-xs font-bold text-gray-900 transition hover:border-teal-400 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500">
+                    <option value="">All barangays</option>
+                    @foreach ($barangays as $b)
+                        <option value="{{ $b }}" @selected($currentBarangay === $b)>{{ $b }}</option>
+                    @endforeach
+                </select>
+                @if ($currentBarangay)
+                    <a href="{{ route('mswdo.requests.index', array_filter(['status' => $current])) }}"
+                       class="text-xs font-bold text-gray-600 underline underline-offset-2 transition hover:text-gray-900">
+                        Clear
+                    </a>
+                @endif
+            </form>
         </div>
     </div>
 
@@ -128,8 +155,16 @@
                                 <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
                                 </svg>
-                                @if($current)
-                                    <p>No requests with the status “{{ $current }}”.</p>
+                                @if($current || $currentBarangay)
+                                    {{-- Naming both filters matters: with only
+                                         one mentioned, the other looks like it
+                                         is not being applied. --}}
+                                    <p>
+                                        No requests
+                                        @if($current) with the status “{{ $current }}” @endif
+                                        @if($current && $currentBarangay) in @endif
+                                        @if($currentBarangay) from {{ $currentBarangay }} @endif
+                                    </p>
                                     <a href="{{ route('mswdo.requests.index') }}" class="btn-soft mt-1">Show all requests</a>
                                 @else
                                     <p>No assistance requests filed yet.</p>

@@ -56,7 +56,7 @@ class ReportController extends Controller
     {
         $request->validate([
             'type' => 'required|in:recipient,budget,audit',
-            'assistance_type' => 'nullable|in:Medical,Burial,Educational,Emergency,Livelihood',
+            'assistance_type' => 'nullable|in:Medical,Burial,Educational,Livelihood',
             'date_from' => 'nullable|date',
             'date_to' => 'nullable|date|after_or_equal:date_from',
         ]);

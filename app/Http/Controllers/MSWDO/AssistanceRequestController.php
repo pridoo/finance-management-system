@@ -13,13 +13,25 @@ class AssistanceRequestController extends Controller
 {
     public function index(Request $request)
     {
+        // Offered from the official list plus anything already on file, so a
+        // barangay captured under an older spelling can still be filtered on
+        // rather than becoming unreachable.
+        $barangays = \App\Support\Barangay::withExisting(
+            Client::query()->whereNotNull('barangay')->distinct()->orderBy('barangay')->pluck('barangay')
+        );
+
         $requests = AssistanceRequest::with('client')
             ->when($request->status, fn ($q) => $q->where('status', $request->status))
+            // Blank means every barangay, which is the default view.
+            ->when($request->filled('barangay'), fn ($q) => $q->whereHas(
+                'client',
+                fn ($c) => $c->where('barangay', $request->string('barangay')->toString())
+            ))
             ->latest()
             ->paginate(25)
             ->withQueryString();
 
-        return view('mswdo.requests.index', compact('requests'));
+        return view('mswdo.requests.index', compact('requests', 'barangays'));
     }
 
     public function create(Request $request)
@@ -33,7 +45,7 @@ class AssistanceRequestController extends Controller
     {
         $data = $request->validate([
             'client_id'        => 'required|exists:clients,id',
-            'assistance_type'  => 'required|in:Medical,Burial,Educational,Emergency,Livelihood',
+            'assistance_type'  => 'required|in:Medical,Burial,Educational,Livelihood',
             'amount_requested' => 'required|numeric|min:1',
             'purpose'          => 'required|string',
         ]);
@@ -101,7 +113,7 @@ class AssistanceRequestController extends Controller
         }
 
         $data = $request->validate([
-            'assistance_type'  => 'required|in:Medical,Burial,Educational,Emergency,Livelihood',
+            'assistance_type'  => 'required|in:Medical,Burial,Educational,Livelihood',
             'amount_requested' => 'required|numeric|min:1',
             'purpose'          => 'required|string',
         ]);

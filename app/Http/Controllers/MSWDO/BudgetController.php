@@ -5,6 +5,7 @@ namespace App\Http\Controllers\MSWDO;
 use App\Http\Controllers\Controller;
 use App\Models\AuditLog;
 use App\Models\Budget;
+use App\Models\BudgetSubAllocation;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 
@@ -23,6 +24,8 @@ class BudgetController extends Controller
 
         $budgets = Budget::withSum('disbursements', 'amount_released')
             ->where('fiscal_year', $year)
+            ->withSum('subAllocations', 'allocated_amount')
+            ->with(['subAllocations' => fn ($q) => $q->orderByDesc('allocated_amount')])
             ->orderBy('assistance_type')
             ->get();
 
@@ -54,7 +57,7 @@ class BudgetController extends Controller
         $this->ensureOfficer();
 
         $data = $request->validate([
-            'assistance_type'  => 'required|in:Medical,Burial,Educational,Emergency,Livelihood',
+            'assistance_type'  => 'required|in:Medical,Burial,Educational,Livelihood',
             'allocated_amount' => 'required|numeric|min:1',
             'fiscal_year'      => 'required|integer|min:2020|max:2099',
         ]);
@@ -172,6 +175,80 @@ class BudgetController extends Controller
 
         return redirect()->route('mswdo.budget.index', ['year' => $year])
             ->with('success', "The {$type} {$year} allocation has been deleted.");
+    }
+
+    /**
+     * Add a named portion to a budget — "College", "TUPAD", "School Supplies".
+     *
+     * Earmarking only: releases are still recorded against the parent budget,
+     * so this changes what the money is set aside for, never what has been
+     * paid out.
+     */
+    public function storeSubAllocation(Request $request, Budget $budget)
+    {
+        $this->ensureOfficer();
+
+        $data = $request->validate([
+            'label'            => 'required|string|max:100',
+            'allocated_amount' => 'required|numeric|min:1',
+        ]);
+
+        $label = trim($data['label']);
+
+        // Case-insensitive, so "College" and "college" cannot both exist and
+        // split the same earmark across two rows.
+        $existing = $budget->subAllocations()
+            ->whereRaw('LOWER(label) = ?', [mb_strtolower($label)])
+            ->first();
+
+        if ($existing) {
+            return back()->with('error', "“{$existing->label}” already exists under {$budget->assistance_type}. Edit it instead of adding a second one.");
+        }
+
+        // The parts cannot promise more than the whole, or the page would show
+        // a fund earmarked beyond what was ever allocated to it.
+        $remaining = $budget->unallocated;
+        if ((float) $data['allocated_amount'] > $remaining) {
+            return back()->with('error', 'Only ₱' . number_format($remaining, 2)
+                . ' of the ' . $budget->assistance_type . ' allocation is still unassigned.');
+        }
+
+        $budget->subAllocations()->create([
+            'label'            => $label,
+            'allocated_amount' => $data['allocated_amount'],
+            'created_by'       => auth()->id(),
+        ]);
+
+        AuditLog::record(
+            "Added sub-allocation “{$label}” to {$budget->assistance_type} {$budget->fiscal_year}",
+            'Budget',
+            $budget->id
+        );
+
+        return redirect()->route('mswdo.budget.index', ['year' => $budget->fiscal_year])
+            ->with('success', 'Earmarked ₱' . number_format((float) $data['allocated_amount'], 2)
+                . " for “{$label}” under {$budget->assistance_type}.");
+    }
+
+    public function destroySubAllocation(Budget $budget, BudgetSubAllocation $subAllocation)
+    {
+        $this->ensureOfficer();
+
+        // Guards against a hand-typed URL pairing a budget with another
+        // budget's sub-allocation.
+        abort_unless($subAllocation->budget_id === $budget->id, 404);
+
+        $label = $subAllocation->label;
+        $subAllocation->delete();
+
+        AuditLog::record(
+            "Removed sub-allocation “{$label}” from {$budget->assistance_type} {$budget->fiscal_year}",
+            'Budget',
+            $budget->id
+        );
+
+        return redirect()->route('mswdo.budget.index', ['year' => $budget->fiscal_year])
+            ->with('success', "Removed “{$label}” from {$budget->assistance_type}.");
     }
 
     private function ensureOfficer(): void

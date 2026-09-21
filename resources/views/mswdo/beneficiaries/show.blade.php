@@ -133,6 +133,62 @@
             @endif
         </div>
 
+        @if ($byCategory->isNotEmpty())
+            {{-- By category. The table below lists every case in date order;
+                 this says what the household has drawn and for what, which is
+                 the question asked when a new request comes in. --}}
+            <div class="border-b border-gray-100 bg-[#fbf9f4] px-6 py-4">
+                <p class="mb-3 text-xs font-bold uppercase tracking-wide text-gray-500">By Assistance Type</p>
+                <div class="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                    @foreach ($byCategory as $type => $totals)
+                        <div class="rounded-xl border border-[#ece7dc] bg-white px-3.5 py-3">
+                            <div class="flex items-baseline justify-between gap-2">
+                                <span class="truncate text-sm font-bold text-gray-900">{{ $type }}</span>
+                                <span class="shrink-0 rounded-full bg-gray-100 px-2 py-0.5 text-xs font-bold text-gray-700 tabular-nums">
+                                    {{ $totals['count'] }}
+                                </span>
+                            </div>
+                            <p class="mt-1.5 text-sm font-bold tabular-nums text-teal-800">
+                                ₱ {{ number_format($totals['released'], 2) }}
+                                <span class="text-xs font-semibold text-gray-500">released</span>
+                            </p>
+                            <p class="text-xs tabular-nums text-gray-600">
+                                of ₱ {{ number_format($totals['requested'], 2) }} requested
+                            </p>
+                        </div>
+                    @endforeach
+                </div>
+            </div>
+        @endif
+
+        @if ($client->assistanceRequests->isNotEmpty())
+            {{-- Pending vs released: the two states the office is actually
+                 asked about. Counts sit on the tabs so an empty one is obvious
+                 before it is clicked. --}}
+            <div class="flex flex-wrap gap-1.5 border-b border-gray-100 px-6 py-3">
+                @php
+                    $stages = [
+                        'all'      => 'All',
+                        'pending'  => 'Pending',
+                        'released' => 'Released',
+                    ];
+                @endphp
+                @foreach ($stages as $key => $label)
+                    <a href="{{ route('mswdo.beneficiaries.show', [$client, 'stage' => $key]) }}"
+                       @if($stage === $key) aria-current="true" @endif
+                       class="inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs transition-all duration-150
+                              {{ $stage === $key
+                                  ? 'bg-teal-700 text-white font-bold shadow-sm ring-2 ring-yellow-300 ring-offset-1'
+                                  : 'bg-gray-100 text-gray-700 font-semibold hover:bg-teal-50 hover:text-teal-800' }}">
+                        {{ $label }}
+                        <span class="tabular-nums {{ $stage === $key ? 'text-teal-100' : 'text-gray-500' }}">
+                            {{ $stageCounts[$key] }}
+                        </span>
+                    </a>
+                @endforeach
+            </div>
+        @endif
+
         <div class="overflow-x-auto">
             <table class="w-full">
                 <thead class="bg-gray-50 text-xs font-semibold uppercase tracking-wide text-gray-600">
@@ -146,7 +202,7 @@
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-100 text-base">
-                    @forelse ($client->assistanceRequests as $req)
+                    @forelse ($requests as $req)
                         <tr class="transition-colors hover:bg-teal-50/50">
                             <td class="px-5 py-4 text-gray-600 whitespace-nowrap">{{ $req->created_at->format('M d, Y') }}</td>
                             <td class="px-5 py-4 font-semibold text-gray-900">{{ $req->assistance_type }}</td>
@@ -196,8 +252,20 @@
                                 <svg class="mx-auto w-12 h-12 text-gray-300" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
                                 </svg>
-                                <p class="mt-3 text-base font-semibold text-gray-700">No assistance records yet</p>
-                                <p class="mt-1 text-sm text-gray-500">Assistance requests for this beneficiary will appear here.</p>
+                                @if ($stage === 'all')
+                                    <p class="mt-3 text-base font-semibold text-gray-700">No assistance records yet</p>
+                                    <p class="mt-1 text-sm text-gray-500">Assistance requests for this beneficiary will appear here.</p>
+                                @else
+                                    {{-- The records exist, just not in this
+                                         stage — saying so stops the tab reading
+                                         as "this beneficiary has nothing". --}}
+                                    <p class="mt-3 text-base font-semibold text-gray-700">
+                                        No {{ $stage }} records
+                                    </p>
+                                    <a href="{{ route('mswdo.beneficiaries.show', $client) }}" class="btn-soft mt-3">
+                                        Show all records
+                                    </a>
+                                @endif
                             </td>
                         </tr>
                     @endforelse

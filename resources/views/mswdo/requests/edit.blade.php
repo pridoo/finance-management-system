@@ -32,7 +32,7 @@
                 <div>
                     <label class="form-label">Type of Assistance</label>
                     <select name="assistance_type" required class="form-control">
-                        @foreach (['Medical','Burial','Educational','Emergency','Livelihood'] as $type)
+                        @foreach (['Medical','Burial','Educational','Livelihood'] as $type)
                             <option value="{{ $type }}" @selected(old('assistance_type', $req->assistance_type) === $type)>{{ $type }}</option>
                         @endforeach
                     </select>

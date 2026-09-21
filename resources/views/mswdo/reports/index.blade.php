@@ -28,7 +28,7 @@
             <label class="form-label">Assistance Type</label>
             <select name="assistance_type" class="form-control">
                 <option value="">All types ▾</option>
-                @foreach (['Medical','Burial','Educational','Emergency','Livelihood'] as $t)
+                @foreach (['Medical','Burial','Educational','Livelihood'] as $t)
                     <option value="{{ $t }}" @selected(request('assistance_type') === $t)>{{ $t }}</option>
                 @endforeach
             </select>

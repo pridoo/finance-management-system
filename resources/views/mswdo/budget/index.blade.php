@@ -101,7 +101,21 @@
             <tbody class="divide-y divide-gray-100">
                 @forelse ($budgets as $budget)
                     <tr class="hover:bg-gray-50 transition-colors">
-                        <td class="px-5 py-3.5 font-semibold text-gray-900">{{ $budget->assistance_type }}</td>
+                        <td class="px-5 py-3.5">
+                            <p class="font-semibold text-gray-900">{{ $budget->assistance_type }}</p>
+                            {{-- How the fund is split internally, as one quiet
+                                 line under the name. The detail lives in the
+                                 Split dialog: five budgets each with their own
+                                 expanded panel buried the table this page is
+                                 actually for. --}}
+                            @if ($budget->subAllocations->isNotEmpty())
+                                <p class="mt-0.5 truncate text-xs text-gray-500" title="{{ $budget->subAllocations->pluck('label')->join(', ') }}">
+                                    {{ $budget->subAllocations->count() }}
+                                    {{ Str::plural('part', $budget->subAllocations->count()) }}:
+                                    {{ Str::limit($budget->subAllocations->pluck('label')->join(', '), 34) }}
+                                </p>
+                            @endif
+                        </td>
                         <td class="px-5 py-3.5 text-gray-800 tabular-nums">{{ number_format($budget->allocated_amount, 2) }}</td>
                         <td class="px-5 py-3.5 font-semibold text-green-700 tabular-nums">{{ number_format($budget->total_released, 2) }}</td>
                         <td class="px-5 py-3.5 font-semibold tabular-nums {{ $budget->remaining_balance < 0 ? 'text-red-700' : 'text-gray-800' }}">
@@ -130,6 +144,20 @@
                                         class="btn-soft-plain">
                                     <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
                                     Releases
+                                </button>
+
+                                {{-- Reading the split is not officer-only, same
+                                     reasoning as Releases above. --}}
+                                <button type="button"
+                                        data-budget-split="{{ $budget->id }}"
+                                        class="btn-soft-plain">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h7"/></svg>
+                                    Split
+                                    @if ($budget->subAllocations->isNotEmpty())
+                                        <span class="ml-1 rounded-full bg-gray-200 px-1.5 text-[10px] font-bold tabular-nums text-gray-700">
+                                            {{ $budget->subAllocations->count() }}
+                                        </span>
+                                    @endif
                                 </button>
 
                                 @if(auth()->user()->role === 'mswdo_officer')
@@ -163,6 +191,7 @@
                             </div>
                         </td>
                     </tr>
+
                 @empty
                     <tr>
                         <td colspan="6">
@@ -186,6 +215,112 @@
 
 </div>
 
+{{-- One split panel per budget, kept out of the table and opened on demand.
+     Rendered as templates rather than fetched, since the data is already on
+     the page and a split is read far more often than it is edited. --}}
+@foreach ($budgets as $budget)
+    <template id="tpl-budget-split-{{ $budget->id }}">
+        <div class="text-left">
+            @php
+                $subTotal = $budget->sub_allocated_total;
+                $subPct   = $budget->allocated_amount > 0
+                    ? min(100, ($subTotal / $budget->allocated_amount) * 100)
+                    : 0;
+            @endphp
+
+            {{-- The whole against its parts, so "how much is still unassigned"
+                 is answered before the list is read. --}}
+            <div class="mb-4 rounded-xl border border-[#ece7dc] bg-[#fbf9f4] px-4 py-3">
+                <div class="flex items-baseline justify-between gap-3">
+                    <span class="text-xs font-bold uppercase tracking-wide text-gray-500">Allocation</span>
+                    <span class="text-sm font-bold tabular-nums text-gray-900">
+                        ₱ {{ number_format($budget->allocated_amount, 2) }}
+                    </span>
+                </div>
+                <div class="mt-2 h-2 overflow-hidden rounded-full bg-gray-200">
+                    <div class="h-2 rounded-full bg-teal-600" style="width: {{ $subPct }}%"></div>
+                </div>
+                <div class="mt-2 flex items-baseline justify-between gap-3 text-xs">
+                    <span class="font-semibold text-teal-800 tabular-nums">
+                        ₱ {{ number_format($subTotal, 2) }} assigned
+                    </span>
+                    <span class="font-semibold text-gray-600 tabular-nums">
+                        ₱ {{ number_format($budget->unallocated, 2) }} unassigned
+                    </span>
+                </div>
+            </div>
+
+            @if ($budget->subAllocations->isNotEmpty())
+                <ul class="mb-4 divide-y divide-gray-100 overflow-hidden rounded-xl border border-[#ece7dc]">
+                    @foreach ($budget->subAllocations as $sub)
+                        <li class="flex items-center justify-between gap-3 bg-white px-4 py-2.5">
+                            <span class="min-w-0 flex-1 truncate text-sm font-semibold text-gray-900">{{ $sub->label }}</span>
+                            <span class="shrink-0 text-sm font-bold tabular-nums text-teal-800">
+                                ₱ {{ number_format($sub->allocated_amount, 2) }}
+                            </span>
+                            @if(auth()->user()->role === 'mswdo_officer')
+                                <form method="POST"
+                                      action="{{ route('mswdo.budget.sub-allocations.destroy', [$budget, $sub]) }}"
+                                      data-swal-confirm="danger"
+                                      data-swal-name="the “{{ $sub->label }}” sub-allocation"
+                                      class="shrink-0">
+                                    @csrf
+                                    @method('DELETE')
+                                    <button type="submit" aria-label="Remove {{ $sub->label }}"
+                                            class="rounded-lg p-1.5 text-gray-400 transition hover:bg-red-50 hover:text-red-600">
+                                        <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+                                        </svg>
+                                    </button>
+                                </form>
+                            @endif
+                        </li>
+                    @endforeach
+                </ul>
+            @else
+                <p class="mb-4 rounded-xl bg-gray-50 px-4 py-3 text-sm text-gray-600">
+                    Not split yet — the whole allocation sits under {{ $budget->assistance_type }}.
+                </p>
+            @endif
+
+            @if(auth()->user()->role === 'mswdo_officer')
+                @if ($budget->unallocated > 0)
+                    <form method="POST" action="{{ route('mswdo.budget.sub-allocations.store', $budget) }}"
+                          class="rounded-xl border border-[#ece7dc] bg-white p-4">
+                        @csrf
+                        <p class="mb-3 text-xs font-bold uppercase tracking-wide text-gray-500">Add a part</p>
+                        <div class="mb-3">
+                            <label for="sub-label-{{ $budget->id }}" class="mb-1.5 block text-xs font-semibold text-gray-600">
+                                Name <span class="text-red-500">*</span>
+                            </label>
+                            <input type="text" id="sub-label-{{ $budget->id }}" name="label" required maxlength="100"
+                                   placeholder="e.g. College"
+                                   class="w-full rounded-lg border border-[#ece7dc] bg-white px-3 py-2 text-sm font-semibold text-gray-900 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500">
+                        </div>
+                        <div class="mb-4">
+                            <label for="sub-amount-{{ $budget->id }}" class="mb-1.5 block text-xs font-semibold text-gray-600">
+                                Amount (₱) <span class="text-red-500">*</span>
+                            </label>
+                            <input type="number" id="sub-amount-{{ $budget->id }}" name="allocated_amount" required
+                                   min="1" step="0.01" max="{{ number_format($budget->unallocated, 2, '.', '') }}"
+                                   placeholder="0.00"
+                                   class="w-full rounded-lg border border-[#ece7dc] bg-white px-3 py-2 text-sm font-semibold tabular-nums text-gray-900 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500">
+                            <p class="mt-1.5 text-xs text-gray-500">
+                                Up to ₱ {{ number_format($budget->unallocated, 2) }} is still unassigned.
+                            </p>
+                        </div>
+                        <button type="submit" class="btn-primary w-full justify-center">Add part</button>
+                    </form>
+                @else
+                    <p class="rounded-xl bg-teal-50 px-4 py-3 text-sm font-semibold text-teal-900">
+                        Fully assigned — remove a part to free up funds.
+                    </p>
+                @endif
+            @endif
+        </div>
+    </template>
+@endforeach
+
 {{-- The add form is now a modal rather than a permanent sidebar panel: it is
      used a handful of times a year, and it was taking a third of the page away
      from the table that gets read every day. --}}
@@ -204,7 +339,7 @@
             </label>
             <select id="add-type" class="swal2-input" style="margin:0;width:100%">
                 <option value="">— Select type —</option>
-                @foreach (['Medical','Burial','Educational','Emergency','Livelihood'] as $t)
+                @foreach (['Medical','Burial','Educational','Livelihood'] as $t)
                     <option value="{{ $t }}">{{ $t }}</option>
                 @endforeach
             </select>
@@ -347,6 +482,35 @@
     });
 
     // ---- View releases --------------------------------------------------
+    // Sub-allocations. The panel is already on the page as a template, so this
+    // only has to show it — the forms inside post normally, which keeps the
+    // delete confirmation and CSRF handling identical to the rest of the page.
+    document.addEventListener('click', async function (event) {
+        var trigger = event.target.closest('[data-budget-split]');
+        if (!trigger) return;
+
+        if (unavailable('The split panel is unavailable — please reload the page.')) return;
+        if (trigger.dataset.busy === 'yes') return;
+        trigger.dataset.busy = 'yes';
+
+        try {
+            var row  = trigger.closest('tr');
+            var type = row ? (row.querySelector('td') || {}).textContent : '';
+
+            await Swal.fire({
+                title: 'Sub-allocations' + (type ? ' — ' + type.trim().split('\n')[0] : ''),
+                html: bodyFrom('tpl-budget-split-' + trigger.dataset.budgetSplit),
+                width: 560,
+                showConfirmButton: false,
+                showCloseButton: true,
+                allowOutsideClick: true,
+                customClass: { popup: 'swal-portal', title: 'swal-portal-title', htmlContainer: 'swal-portal-body' },
+            });
+        } finally {
+            trigger.dataset.busy = 'no';
+        }
+    });
+
     document.addEventListener('click', async function (event) {
         var trigger = event.target.closest('[data-budget-view]');
         if (!trigger) return;

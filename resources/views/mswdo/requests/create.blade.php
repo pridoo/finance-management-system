@@ -119,7 +119,7 @@
                             <label class="form-label">Type of Assistance <span class="text-red-500">*</span></label>
                             <select name="assistance_type" required class="form-control">
                                 <option value="">— Select type —</option>
-                                @foreach (['Medical','Burial','Educational','Emergency','Livelihood'] as $t)
+                                @foreach (['Medical','Burial','Educational','Livelihood'] as $t)
                                     <option value="{{ $t }}" {{ old('assistance_type') == $t ? 'selected' : '' }}>{{ $t }}</option>
                                 @endforeach
                             </select>

@@ -28,6 +28,29 @@ class Budget extends Model
         return $this->hasMany(Disbursement::class);
     }
 
+    public function subAllocations()
+    {
+        return $this->hasMany(BudgetSubAllocation::class);
+    }
+
+    /**
+     * How much of the allocation has been earmarked into named portions.
+     *
+     * Kept separate from released money: earmarking is a plan, a release is a
+     * payment, and conflating the two would overstate what has been spent.
+     */
+    public function getSubAllocatedTotalAttribute(): float
+    {
+        return (float) ($this->attributes['sub_allocations_sum_allocated_amount']
+            ?? $this->subAllocations()->sum('allocated_amount'));
+    }
+
+    /** Allocation not yet split into a named portion. */
+    public function getUnallocatedAttribute(): float
+    {
+        return max(0, (float) $this->allocated_amount - $this->sub_allocated_total);
+    }
+
     public function getTotalReleasedAttribute(): float
     {
         return (float) ($this->attributes['disbursements_sum_amount_released']

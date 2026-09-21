@@ -9,6 +9,9 @@
      current one. --}}
 @section('page-actions')
     <form method="GET" action="{{ route('mswdo.dashboard') }}" class="flex items-center gap-2">
+        {{-- The month filter survives a year change; the date range does not,
+             since its days belong to the year being left behind. --}}
+        <input type="hidden" name="month" value="{{ $month }}">
         <label for="dash-year" class="text-xs font-bold uppercase tracking-wide text-gray-500 whitespace-nowrap">Fiscal Year</label>
         <select id="dash-year" name="year" onchange="this.form.submit()"
                 class="rounded-xl border border-[#ece7dc] bg-white px-3 py-2 text-sm font-bold text-gray-900 transition hover:border-teal-400 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500">
@@ -79,15 +82,36 @@
         <div class="panel-head">
             {{-- The list is filtered to the selected year, so the heading has
                  to say which — otherwise a past year's rows read as current. --}}
-            <h3 class="panel-title">Recent Assistance Requests ({{ $year }})</h3>
-            {{-- Was 12px plain text. Now a real target with an arrow, which is
-                 both easier to hit and easier to recognise as a link. --}}
-            <a href="{{ route('mswdo.requests.index') }}" class="btn-soft shrink-0">
-                View all
-                <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24" aria-hidden="true">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/>
-                </svg>
-            </a>
+            <h3 class="panel-title">
+                Recent Assistance Requests
+                ({{ $month === 'all' ? $year : $months[(int) $month] . ' ' . $year }})
+            </h3>
+            <div class="flex items-center gap-2">
+                {{-- Month narrows the list within the selected year. Submitting
+                     on change keeps it to one action, and the year and range are
+                     carried through so this filter never resets the others. --}}
+                <form method="GET" action="{{ route('mswdo.dashboard') }}" class="flex items-center gap-2">
+                    <input type="hidden" name="year" value="{{ $year }}">
+                    <input type="hidden" name="from" value="{{ $from->format('Y-m-d') }}">
+                    <input type="hidden" name="to" value="{{ $to->format('Y-m-d') }}">
+                    <label for="dash-month" class="sr-only">Month</label>
+                    <select id="dash-month" name="month" onchange="this.form.submit()"
+                            class="rounded-xl border border-[#ece7dc] bg-white px-3 py-1.5 text-xs font-bold text-gray-900 transition hover:border-teal-400 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500">
+                        <option value="all" @selected($month === 'all')>All months</option>
+                        @foreach ($months as $number => $name)
+                            <option value="{{ $number }}" @selected((string) $month === (string) $number)>{{ $name }}</option>
+                        @endforeach
+                    </select>
+                </form>
+                {{-- Was 12px plain text. Now a real target with an arrow, which is
+                     both easier to hit and easier to recognise as a link. --}}
+                <a href="{{ route('mswdo.requests.index') }}" class="btn-soft shrink-0">
+                    View all
+                    <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/>
+                    </svg>
+                </a>
+            </div>
         </div>
         <div class="overflow-x-auto">
             <table class="w-full text-sm">
@@ -136,7 +160,7 @@
                                     <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
                                     </svg>
-                                    <p>No assistance requests filed in {{ $year }}.</p>
+                                    <p>No assistance requests filed in {{ $month === 'all' ? $year : $months[(int) $month] . ' ' . $year }}.</p>
                                 </div>
                             </td>
                         </tr>
@@ -148,7 +172,45 @@
 
     {{-- Budget Utilization --}}
     <div class="lg:col-span-2 panel p-5">
-        <h3 class="panel-title is-accent mb-4">Budget Utilization ({{ $year }})</h3>
+        <h3 class="panel-title is-accent mb-1">Budget Utilization</h3>
+        {{-- The window has to be stated: "60% utilised" means something
+             different over four months than over the whole year. --}}
+        <p class="mb-3 text-xs font-semibold text-gray-600">
+            {{ $isFullYear
+                ? 'Full year ' . $year
+                : $from->format('M j, Y') . ' — ' . $to->format('M j, Y') }}
+        </p>
+
+        {{-- From/to picker. Both ends are clamped into the selected fiscal year
+             by the controller, so this can never describe a period the year
+             picker says is not being shown. --}}
+        <form method="GET" action="{{ route('mswdo.dashboard') }}" class="mb-4 rounded-xl border border-[#ece7dc] bg-[#fbf9f4] p-3">
+            <input type="hidden" name="year" value="{{ $year }}">
+            <input type="hidden" name="month" value="{{ $month }}">
+            <div class="flex flex-wrap items-end gap-2">
+                <div class="min-w-0 flex-1">
+                    <label for="util-from" class="mb-1 block text-[11px] font-bold uppercase tracking-wide text-gray-500">From</label>
+                    <input type="date" id="util-from" name="from" value="{{ $from->format('Y-m-d') }}"
+                           min="{{ $year }}-01-01" max="{{ $year }}-12-31"
+                           class="w-full rounded-lg border border-[#ece7dc] bg-white px-2.5 py-1.5 text-xs font-semibold text-gray-900 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500">
+                </div>
+                <div class="min-w-0 flex-1">
+                    <label for="util-to" class="mb-1 block text-[11px] font-bold uppercase tracking-wide text-gray-500">To</label>
+                    <input type="date" id="util-to" name="to" value="{{ $to->format('Y-m-d') }}"
+                           min="{{ $year }}-01-01" max="{{ $year }}-12-31"
+                           class="w-full rounded-lg border border-[#ece7dc] bg-white px-2.5 py-1.5 text-xs font-semibold text-gray-900 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500">
+                </div>
+                <button type="submit" class="rounded-lg bg-teal-600 px-3 py-1.5 text-xs font-bold text-white transition hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-1">
+                    Apply
+                </button>
+                @unless ($isFullYear)
+                    <a href="{{ route('mswdo.dashboard', ['year' => $year, 'month' => $month]) }}"
+                       class="rounded-lg px-2 py-1.5 text-xs font-bold text-gray-600 underline underline-offset-2 transition hover:text-gray-900">
+                        Reset
+                    </a>
+                @endunless
+            </div>
+        </form>
         @php
             // Walked through green into yellow rather than five unrelated hues,
             // so the set reads as one chart. Each step is distinguishable from
@@ -161,7 +223,49 @@
                 'bg-yellow-400',
                 'bg-amber-500',
             ];
+            // The same walk as the bars, as hex, so a type keeps one colour
+            // whichever of the two it appears in.
+            $sliceColors = ['#0d9488', '#2dd4bf', '#84cc16', '#facc15', '#f59e0b'];
         @endphp
+
+        {{-- Share of money actually released, by assistance type. The bars below
+             answer "how much of each allocation is used"; this answers "where
+             did the spending go", which is the question a pie can actually
+             carry. --}}
+        @if ($budgetPie->isNotEmpty())
+            <div class="mb-5 flex items-center gap-4">
+                {{-- A donut drawn with stroke-dasharray: no chart library, and it
+                     stays sharp at any size. r=15.915 makes the circumference
+                     exactly 100, so a slice's percentage is its dash length. --}}
+                <svg viewBox="0 0 42 42" class="h-28 w-28 shrink-0 -rotate-90" role="img"
+                     aria-label="Released budget by assistance type">
+                    <circle cx="21" cy="21" r="15.915" fill="none" stroke="#f1efe9" stroke-width="6"></circle>
+                    @foreach ($budgetPie as $i => $slice)
+                        <circle cx="21" cy="21" r="15.915" fill="none"
+                                stroke="{{ $sliceColors[$i % count($sliceColors)] }}" stroke-width="6"
+                                stroke-dasharray="{{ round($slice['share'], 2) }} {{ round(100 - $slice['share'], 2) }}"
+                                stroke-dashoffset="{{ round(100 - $slice['offset'], 2) }}">
+                            <title>{{ $slice['type'] }}: ₱{{ number_format($slice['value'], 2) }} ({{ round($slice['share']) }}%)</title>
+                        </circle>
+                    @endforeach
+                </svg>
+
+                <div class="min-w-0 flex-1">
+                    <p class="text-[11px] font-bold uppercase tracking-wide text-gray-500">Total Released</p>
+                    <p class="mb-2 text-lg font-bold tabular-nums text-gray-900">₱ {{ number_format($releasedInWindow, 2) }}</p>
+                    <ul class="space-y-1">
+                        @foreach ($budgetPie as $i => $slice)
+                            <li class="flex items-center gap-2 text-xs">
+                                <span class="h-2.5 w-2.5 shrink-0 rounded-full"
+                                      style="background: {{ $sliceColors[$i % count($sliceColors)] }}"></span>
+                                <span class="min-w-0 flex-1 truncate font-medium text-gray-700">{{ $slice['type'] }}</span>
+                                <span class="shrink-0 font-bold tabular-nums text-gray-900">{{ round($slice['share']) }}%</span>
+                            </li>
+                        @endforeach
+                    </ul>
+                </div>
+            </div>
+        @endif
         @forelse ($budgetUtilization as $i => $b)
             <div class="mb-4">
                 <div class="flex justify-between text-xs mb-1.5">
@@ -186,6 +290,14 @@
         @empty
             <p class="text-sm text-gray-500 text-center py-6">No budget records for {{ $year }}.</p>
         @endforelse
+
+        @if ($budgetUtilization->isNotEmpty() && $releasedInWindow <= 0)
+            {{-- Allocations exist but nothing was released in this window, which
+                 is a real answer rather than a blank panel. --}}
+            <p class="rounded-lg bg-gray-50 px-3 py-2 text-xs font-semibold text-gray-600">
+                No releases recorded in this period.
+            </p>
+        @endif
     </div>
 
 </div>

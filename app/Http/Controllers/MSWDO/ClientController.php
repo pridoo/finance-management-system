@@ -76,10 +76,50 @@ class ClientController extends Controller
             ->with('success', 'Beneficiary registered successfully.');
     }
 
-    public function show(Client $client)
+    public function show(Request $request, Client $client)
     {
         $client->load(['assistanceRequests.approval', 'assistanceRequests.disbursement']);
-        return view('mswdo.beneficiaries.show', compact('client'));
+
+        $history = $client->assistanceRequests;
+
+        // Totals per assistance type, so the profile answers "what has this
+        // household drawn, and for what?" without the clerk adding the column
+        // up by eye. Built from the whole history, not the filtered view, so
+        // the summary does not move when the filter does.
+        $byCategory = $history
+            ->groupBy('assistance_type')
+            ->map(fn ($rows) => [
+                'count'     => $rows->count(),
+                'requested' => (float) $rows->sum('amount_requested'),
+                'released'  => (float) $rows->sum(fn ($r) => $r->disbursement->amount_released ?? 0),
+            ])
+            ->sortByDesc('released');
+
+        // 'pending' is everything still moving through the office; 'released'
+        // is money actually paid out. Those are the two questions asked of this
+        // table, so they are the two filters offered.
+        $stage = $request->get('stage', 'all');
+        if (! in_array($stage, ['all', 'pending', 'released'], true)) {
+            $stage = 'all';
+        }
+
+        $pendingStatuses = ['Pending', 'Under Review', 'Approved', 'For Release'];
+
+        $requests = match ($stage) {
+            'pending'  => $history->whereIn('status', $pendingStatuses),
+            'released' => $history->where('status', 'Released'),
+            default    => $history,
+        };
+
+        $stageCounts = [
+            'all'      => $history->count(),
+            'pending'  => $history->whereIn('status', $pendingStatuses)->count(),
+            'released' => $history->where('status', 'Released')->count(),
+        ];
+
+        return view('mswdo.beneficiaries.show', compact(
+            'client', 'requests', 'byCategory', 'stage', 'stageCounts'
+        ));
     }
 
     public function edit(Client $client)

@@ -181,7 +181,7 @@
             <div>
                 <label for="edit-type" class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-600">Type of Assistance</label>
                 <select id="edit-type" class="swal2-input" style="margin:0;width:100%">
-                    @foreach (['Medical','Burial','Educational','Emergency','Livelihood'] as $type)
+                    @foreach (['Medical','Burial','Educational','Livelihood'] as $type)
                         <option value="{{ $type }}" @selected($req->assistance_type === $type)>{{ $type }}</option>
                     @endforeach
                 </select>
