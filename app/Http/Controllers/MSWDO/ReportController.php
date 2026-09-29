@@ -6,7 +6,9 @@ use App\Http\Controllers\Controller;
 use App\Models\AssistanceRequest;
 use App\Models\AuditLog;
 use App\Models\Budget;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class ReportController extends Controller
@@ -50,6 +52,34 @@ class ReportController extends Controller
 
             fclose($file);
         }, $filename, ['Content-Type' => 'text/csv; charset=UTF-8']);
+    }
+
+    public function exportPdf(Request $request): Response
+    {
+        $this->validateFilters($request);
+        $report = $this->buildReport($request);
+        $filename = $request->string('type')->slug().'_report_'.now()->format('Ymd_His').'.pdf';
+
+        // Always A4 portrait, matching the office's letterhead paper.
+        $pdf = Pdf::loadView('mswdo.reports.pdf', [
+            'report' => $report,
+            'type' => $request->string('type')->toString(),
+        ])->setPaper('a4', 'portrait');
+
+        // Page numbers need the final page count, so they are stamped onto
+        // the canvas after layout rather than written into the template.
+        $pdf->render();
+        $canvas = $pdf->getDomPDF()->getCanvas();
+        $canvas->page_text(
+            $canvas->get_width() - 110,
+            $canvas->get_height() - 28,
+            'Page {PAGE_NUM} of {PAGE_COUNT}',
+            $pdf->getDomPDF()->getFontMetrics()->getFont('DejaVu Sans'),
+            8,
+            [0.4, 0.4, 0.4],
+        );
+
+        return $pdf->download($filename);
     }
 
     private function validateFilters(Request $request): void

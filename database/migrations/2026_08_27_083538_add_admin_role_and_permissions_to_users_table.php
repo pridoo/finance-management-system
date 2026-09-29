@@ -11,10 +11,20 @@ return new class extends Migration
     {
         // role is an enum, so a new value has to be added by redefining the
         // column. Doctrine/DBAL cannot modify enums, hence the raw statement.
-        DB::statement(
-            "ALTER TABLE users MODIFY COLUMN role
-             ENUM('admin', 'mswdo_officer', 'mswdo_staff') NOT NULL DEFAULT 'mswdo_staff'"
-        );
+        if (DB::getDriverName() === 'sqlite') {
+            // The test database. SQLite has no MODIFY, and its enum is a CHECK
+            // constraint that would refuse 'admin', so the column is rebuilt as
+            // the plain string the next migration widens it to anyway.
+            DB::statement("ALTER TABLE users ADD COLUMN role_new VARCHAR(50) NOT NULL DEFAULT 'mswdo_staff'");
+            DB::statement('UPDATE users SET role_new = role');
+            DB::statement('ALTER TABLE users DROP COLUMN role');
+            DB::statement('ALTER TABLE users RENAME COLUMN role_new TO role');
+        } else {
+            DB::statement(
+                "ALTER TABLE users MODIFY COLUMN role
+                 ENUM('admin', 'mswdo_officer', 'mswdo_staff') NOT NULL DEFAULT 'mswdo_staff'"
+            );
+        }
 
         Schema::table('users', function (Blueprint $table) {
             // Disabled accounts keep their history and audit trail; only the
@@ -38,6 +48,10 @@ return new class extends Migration
         // Any admin left behind would violate the narrowed enum, so fold them
         // back into the officer role before restoring it.
         DB::table('users')->where('role', 'admin')->update(['role' => 'mswdo_officer']);
+
+        if (DB::getDriverName() === 'sqlite') {
+            return;
+        }
 
         DB::statement(
             "ALTER TABLE users MODIFY COLUMN role

@@ -37,6 +37,14 @@ class MswdoWorkflowTest extends TestCase
                 ->get(route('mswdo.reports.export', ['type' => $type]))
                 ->assertOk()
                 ->assertHeader('content-type', 'text/csv; charset=UTF-8');
+
+            $pdf = $this->actingAs($officer)
+                ->get(route('mswdo.reports.export-pdf', ['type' => $type]))
+                ->assertOk()
+                ->assertHeader('content-type', 'application/pdf')
+                ->assertDownload();
+
+            $this->assertStringStartsWith('%PDF', $pdf->getContent());
         }
     }
 

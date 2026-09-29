@@ -7,7 +7,9 @@ use App\Models\AssistanceRequest;
 use App\Models\AuditLog;
 use App\Models\Budget;
 use App\Models\Client;
+use App\Support\Requirements;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 
 class AssistanceRequestController extends Controller
 {
@@ -38,7 +40,8 @@ class AssistanceRequestController extends Controller
     {
         $clients = Client::orderBy('last_name')->get();
         $selectedClient = $request->client_id ? Client::find($request->client_id) : null;
-        return view('mswdo.requests.create', compact('clients', 'selectedClient'));
+        $requirements = Requirements::all();
+        return view('mswdo.requests.create', compact('clients', 'selectedClient', 'requirements'));
     }
 
     public function store(Request $request)
@@ -48,7 +51,12 @@ class AssistanceRequestController extends Controller
             'assistance_type'  => 'required|in:Medical,Burial,Educational,Livelihood',
             'amount_requested' => 'required|numeric|min:1',
             'purpose'          => 'required|string',
+            'submitted_docs'   => 'nullable|array',
+            // Only documents on the chosen type's checklist, so a Burial
+            // request cannot be stored as having an enrollment form.
+            'submitted_docs.*' => ['string', Rule::in(Requirements::labels((string) $request->input('assistance_type')))],
         ]);
+        $data['submitted_docs'] = array_values(array_unique($data['submitted_docs'] ?? []));
 
         // Advisory, not a block: the clerk confirms once and the same submit
         // goes through. There are legitimate reasons to file a second request
@@ -95,8 +103,9 @@ class AssistanceRequestController extends Controller
             ->get();
 
         return view('mswdo.requests.show', [
-            'req'     => $assistanceRequest,
-            'budgets' => $budgets,
+            'req'          => $assistanceRequest,
+            'budgets'      => $budgets,
+            'requirements' => Requirements::labels($assistanceRequest->assistance_type),
         ]);
     }
 
@@ -117,6 +126,15 @@ class AssistanceRequestController extends Controller
             'amount_requested' => 'required|numeric|min:1',
             'purpose'          => 'required|string',
         ]);
+
+        // A change of type keeps only the submitted documents that are still
+        // on the new type's checklist; the rest no longer mean anything.
+        if ($data['assistance_type'] !== $assistanceRequest->assistance_type && $assistanceRequest->submitted_docs !== null) {
+            $data['submitted_docs'] = array_values(array_intersect(
+                $assistanceRequest->submitted_docs,
+                Requirements::labels($data['assistance_type'])
+            ));
+        }
 
         $assistanceRequest->update($data);
         AuditLog::record("Updated request #{$assistanceRequest->id}", 'Requests', $assistanceRequest->id);

@@ -1200,7 +1200,7 @@
 }
 
 /*
-   Print: Export PDF on the Reports page calls window.print(). Without these
+   Print: Printing the Reports page (Ctrl+P). Without these
    rules the browser prints the entire page - sidebar, topbar, filter bar,
    budget chart and audit log - when the only thing wanted is the report table.
 

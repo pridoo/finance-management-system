@@ -77,5 +77,6 @@ Route::middleware(['auth', 'active', 'notviewonly'])->prefix('mswdo')->name('msw
     Route::middleware('module:reports')->group(function () {
         Route::get('/reports', [ReportController::class, 'index'])->name('reports.index');
         Route::get('/reports/export', [ReportController::class, 'export'])->name('reports.export');
+        Route::get('/reports/export-pdf', [ReportController::class, 'exportPdf'])->name('reports.export-pdf');
     });
 });

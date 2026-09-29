@@ -119,6 +119,42 @@
         </dl>
     </div>
 
+    {{-- Submitted requirements, against the checklist for this request's type,
+         so what is still missing is as visible as what was handed in. --}}
+    <div class="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+        <div class="flex items-center justify-between gap-3 border-b border-gray-100 px-6 py-4">
+            <h3 class="text-sm font-bold uppercase tracking-wide text-gray-700">Submitted Requirements</h3>
+            @if ($req->submitted_docs !== null)
+                <span class="text-xs font-semibold tabular-nums text-gray-500">
+                    {{ count(array_intersect($req->submitted_docs, $requirements)) }} of {{ count($requirements) }}
+                </span>
+            @endif
+        </div>
+        @if ($req->submitted_docs === null)
+            {{-- Filed before the checklist was stored. --}}
+            <p class="px-6 py-5 text-sm italic text-gray-500">Not recorded for this request.</p>
+        @else
+            <ul class="grid grid-cols-1 gap-x-8 gap-y-2.5 px-6 py-5 sm:grid-cols-2">
+                @foreach ($requirements as $doc)
+                    @php $has = in_array($doc, $req->submitted_docs, true); @endphp
+                    <li class="flex items-center gap-2.5 text-sm {{ $has ? 'text-gray-800' : 'text-gray-400' }}">
+                        @if ($has)
+                            <svg class="h-4 w-4 shrink-0 text-green-600" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24" aria-hidden="true">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
+                            </svg>
+                        @else
+                            <svg class="h-4 w-4 shrink-0 text-red-400" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24" aria-hidden="true">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+                            </svg>
+                        @endif
+                        {{ $doc }}
+                        <span class="sr-only">{{ $has ? '(submitted)' : '(missing)' }}</span>
+                    </li>
+                @endforeach
+            </ul>
+        @endif
+    </div>
+
     {{-- Approval info --}}
     @if($req->approval)
     <div class="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">

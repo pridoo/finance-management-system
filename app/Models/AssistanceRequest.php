@@ -11,11 +11,12 @@ class AssistanceRequest extends Model
 
     protected $fillable = [
         'client_id', 'assistance_type', 'amount_requested',
-        'purpose', 'status', 'encoded_by',
+        'purpose', 'submitted_docs', 'status', 'encoded_by',
     ];
 
     protected $casts = [
         'amount_requested' => 'decimal:2',
+        'submitted_docs'   => 'array',
     ];
 
     public function client()
