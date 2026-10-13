@@ -57,13 +57,38 @@ class RequirementsTest extends TestCase
             'assistance_type'  => 'Burial',
             'amount_requested' => 5000,
             'purpose'          => 'Burial of father.',
-            'submitted_docs'   => ['Death certificate', 'Funeral contract'],
+            'submitted_docs'   => Requirements::labels('Burial'),
         ])->assertSessionHasNoErrors();
 
         $this->assertSame(
-            ['Death certificate', 'Funeral contract'],
+            Requirements::labels('Burial'),
             AssistanceRequest::first()->submitted_docs
         );
+    }
+
+    public function test_a_request_with_unchecked_requirements_is_refused(): void
+    {
+        $officer = User::factory()->create(['role' => 'mswdo_officer']);
+
+        $this->actingAs($officer)->post(route('mswdo.requests.store'), [
+            'client_id'        => $this->client()->id,
+            'assistance_type'  => 'Burial',
+            'amount_requested' => 5000,
+            'purpose'          => 'Burial of father.',
+            'submitted_docs'   => ['Death certificate', 'Funeral contract'],
+        ])->assertSessionHasErrors('submitted_docs');
+
+        $this->assertSame(0, AssistanceRequest::count());
+    }
+
+    public function test_the_submit_button_starts_disabled(): void
+    {
+        $officer = User::factory()->create(['role' => 'mswdo_officer']);
+
+        $this->actingAs($officer)
+            ->get(route('mswdo.requests.create'))
+            ->assertOk()
+            ->assertSee('data-submit-request disabled', false);
     }
 
     public function test_a_document_from_another_types_checklist_is_refused(): void

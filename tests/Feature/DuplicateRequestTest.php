@@ -5,13 +5,13 @@ namespace Tests\Feature;
 use App\Models\AssistanceRequest;
 use App\Models\Client;
 use App\Models\User;
+use App\Support\Requirements;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 /**
  * Filing a second request of the same type for a beneficiary who already has
- * one open warns the clerk and offers to show them the existing one, rather
- * than quietly stacking duplicates in the approval queue.
+ * one open is refused, and the clerk is offered the existing one instead.
  */
 class DuplicateRequestTest extends TestCase
 {
@@ -50,12 +50,17 @@ class DuplicateRequestTest extends TestCase
 
     private function payload(Client $client, array $overrides = []): array
     {
-        return array_merge([
+        $payload = array_merge([
             'client_id'        => $client->id,
             'assistance_type'  => 'Educational',
             'amount_requested' => 3000,
             'purpose'          => 'Another tuition request.',
         ], $overrides);
+
+        // A request is only accepted with its full checklist ticked.
+        $payload['submitted_docs'] ??= Requirements::labels($payload['assistance_type']);
+
+        return $payload;
     }
 
     public function test_a_second_open_request_of_the_same_type_is_flagged(): void
@@ -150,21 +155,20 @@ class DuplicateRequestTest extends TestCase
         }
     }
 
-    public function test_confirming_files_the_request_anyway(): void
+    public function test_the_block_cannot_be_overridden(): void
     {
         $officer = $this->officer();
         $client  = $this->client();
         $this->existingRequest($client, $officer);
 
-        // The warning is advisory: a second hospital admission or a second
-        // child in school are legitimate reasons to file again.
+        // The old "file anyway" flag no longer does anything: the open
+        // request has to be closed before another of its type is filed.
         $this->actingAs($officer)
             ->post(route('mswdo.requests.store'),
                 $this->payload($client, ['allow_duplicate_request' => '1']))
-            ->assertRedirect(route('mswdo.approvals.index'))
-            ->assertSessionHas('success');
+            ->assertSessionHas('duplicate_request');
 
-        $this->assertSame(2, AssistanceRequest::count());
+        $this->assertSame(1, AssistanceRequest::count());
     }
 
     public function test_the_warning_markup_reaches_the_page(): void

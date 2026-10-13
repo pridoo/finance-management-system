@@ -13,6 +13,7 @@ class FlashRenderTest extends TestCase
     public function test_success_flash_element_is_rendered_after_a_redirect(): void
     {
         $officer = User::factory()->create(['role' => 'mswdo_officer']);
+        \App\Models\AnnualFund::create(['fiscal_year' => now()->year, 'amount' => 1000000, 'created_by' => $officer->id]);
 
         $this->actingAs($officer)->post(route('mswdo.budget.store'), [
             'assistance_type'  => 'Medical',

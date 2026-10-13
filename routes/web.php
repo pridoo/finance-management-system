@@ -14,6 +14,10 @@ use Illuminate\Support\Facades\Route;
 // Redirect root to login
 Route::redirect('/', '/login')->name('home');
 
+// Polled by open pages to notice `php artisan down` while someone is mid-task.
+// Answers 204 normally; maintenance mode turns it into a 503 like every route.
+Route::get('/ping', fn () => response()->noContent())->name('ping');
+
 // Auth routes
 Route::middleware('guest')->group(function () {
     Route::get('/login', [LoginController::class, 'showLoginForm'])->name('login');
@@ -44,6 +48,9 @@ Route::middleware(['auth', 'active', 'notviewonly'])->prefix('mswdo')->name('msw
         ->middleware('module:dashboard')->name('dashboard');
 
     // Beneficiaries
+    Route::get('/beneficiaries/{client}/intake-form', [ClientController::class, 'intakePdf'])
+        ->name('beneficiaries.intake-pdf')
+        ->middleware('module:beneficiaries');
     Route::resource('beneficiaries', ClientController::class)
         ->parameters(['beneficiaries' => 'client'])
         ->middleware('module:beneficiaries');
@@ -67,6 +74,10 @@ Route::middleware(['auth', 'active', 'notviewonly'])->prefix('mswdo')->name('msw
     // Named portions of a budget — "College", "TUPAD", "School Supplies".
     // Nested under the budget they belong to so the parent is always in hand.
     Route::middleware('module:budget')->group(function () {
+        // The year's whole fund, which the per-type allocations draw from.
+        Route::post('/budget-fund', [BudgetController::class, 'storeFund'])
+            ->name('budget.fund.store');
+
         Route::post('/budget/{budget}/sub-allocations', [BudgetController::class, 'storeSubAllocation'])
             ->name('budget.sub-allocations.store');
         Route::delete('/budget/{budget}/sub-allocations/{subAllocation}', [BudgetController::class, 'destroySubAllocation'])

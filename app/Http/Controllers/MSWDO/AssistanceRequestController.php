@@ -10,6 +10,7 @@ use App\Models\Client;
 use App\Support\Requirements;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class AssistanceRequestController extends Controller
 {
@@ -58,13 +59,22 @@ class AssistanceRequestController extends Controller
         ]);
         $data['submitted_docs'] = array_values(array_unique($data['submitted_docs'] ?? []));
 
-        // Advisory, not a block: the clerk confirms once and the same submit
-        // goes through. There are legitimate reasons to file a second request
-        // of the same type — a separate hospital admission, a second child in
-        // school — so refusing outright would be wrong. What is worth stopping
-        // is the accidental re-filing of a request that is already in the
-        // queue, which is otherwise only noticed at approval time.
-        if (($open = $this->findOpenRequest($data)) && ! $request->boolean('allow_duplicate_request')) {
+        // Every document on the checklist has to be in hand before a request
+        // is filed. The form keeps Submit disabled until they are all ticked;
+        // this is the same rule for a request that skipped the form.
+        $missing = array_diff(Requirements::labels($data['assistance_type']), $data['submitted_docs']);
+        if ($missing) {
+            throw ValidationException::withMessages([
+                'submitted_docs' => 'All requirements must be submitted first. Still missing: '
+                    . implode(', ', $missing) . '.',
+            ]);
+        }
+
+        // A hard block, with no "file anyway". The office's rule is one open
+        // request per beneficiary per type: the existing one has to be
+        // released or rejected first, and a rejection stands rather than being
+        // worked around by filing the same case again.
+        if ($open = $this->findOpenRequest($data)) {
             return back()->withInput()->with('duplicate_request', [
                 'name'   => $open->client?->full_name ?? 'This beneficiary',
                 'type'   => $open->assistance_type,

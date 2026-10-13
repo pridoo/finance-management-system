@@ -93,13 +93,14 @@
     --color-brand-yellow-deep:#a16207;
 
     /* --- Surfaces ---------------------------------------------------------
-       A warm off-white ground rather than a cold grey. White cards lift off
-       it cleanly, and it stops a screen of tables reading as a spreadsheet.
-       The canvas is very slightly warm; the sidebar is a shade lighter again
-       so the two read as separate planes without needing a hard border. */
-    --color-brand-canvas:     #faf8f3;
+       Mostly white, with the cream kept to the sidebar. The working area is
+       a near-white with only a trace of warmth, so the page reads as white;
+       the rail carries the cream, which keeps the two planes apart and stops
+       the screen going flat. Cards lift off the canvas by their border and
+       shadow rather than by a difference in fill. */
+    --color-brand-canvas:     #fcfcfa;
     --color-brand-surface:    #ffffff;
-    --color-brand-rail:       #fdfcf9;
+    --color-brand-rail:       #f8f5ec;
     --color-brand-line:       #ece7dc;
 }
 
@@ -288,6 +289,33 @@
     }
     /* Yellow variant, for the second panel in a pair. */
     .panel-title.is-accent::before { background: #eab308; }
+
+    /* Section headings on the Family Intake Data Form, lettered A–G like the
+       paper original so the clerk can follow one against the other. */
+    .intake-heading {
+        display: flex;
+        align-items: center;
+        gap: .625rem;
+        margin-bottom: 1rem;
+        padding-bottom: .75rem;
+        border-bottom: 1px solid #f2eee5;
+        color: #1f2937;
+        font-size: .9375rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: .02em;
+    }
+    .intake-heading > span {
+        display: grid;
+        place-items: center;
+        width: 1.75rem;
+        height: 1.75rem;
+        border-radius: 9999px;
+        background: #15803d;
+        color: #fff;
+        font-size: .75rem;
+        line-height: 1;
+    }
 
     /* A filter/search strip. Tinted just enough to separate the controls from
        the data below without becoming another band of colour. */

@@ -16,8 +16,8 @@
     <div class="rail-brand">
         <img src="{{ asset('images/sanagustinlogo.png') }}" alt="" class="rail-seal" aria-hidden="true">
         <div class="min-w-0 flex-1">
-            <h1 class="truncate text-sm font-extrabold leading-tight text-gray-900">San Agustin Portal</h1>
-            <p class="mt-0.5 text-[11px] font-semibold text-teal-700">MSWDO · v2.0</p>
+            <h1 class="truncate text-sm font-extrabold leading-tight text-gray-900">San Agustin-MSWDO</h1>
+            <p class="mt-0.5 text-[11px] font-semibold text-teal-700">v2.0</p>
         </div>
         <button type="button" data-sidebar-close
                 class="lg:hidden shrink-0 rounded-lg p-1.5 text-gray-500 hover:bg-gray-100 hover:text-gray-900"

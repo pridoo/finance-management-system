@@ -66,6 +66,76 @@ class BudgetPageTest extends TestCase
             ->assertForbidden();
     }
 
+    public function test_allocations_are_drawn_from_the_annual_fund(): void
+    {
+        $officer = $this->officer();
+        $year = now()->year;
+
+        $this->actingAs($officer)
+            ->post(route('mswdo.budget.fund.store'), ['fiscal_year' => $year, 'amount' => 3000000])
+            ->assertSessionHasNoErrors();
+
+        $this->actingAs($officer)
+            ->post(route('mswdo.budget.store'), ['assistance_type' => 'Medical', 'allocated_amount' => 2000000, 'fiscal_year' => $year])
+            ->assertSessionHasNoErrors();
+
+        // Only ₱1M is left, so ₱1.5M more is refused rather than growing the year.
+        $this->actingAs($officer)
+            ->post(route('mswdo.budget.store'), ['assistance_type' => 'Burial', 'allocated_amount' => 1500000, 'fiscal_year' => $year])
+            ->assertSessionHasErrors('allocated_amount');
+
+        $this->actingAs($officer)
+            ->post(route('mswdo.budget.store'), ['assistance_type' => 'Burial', 'allocated_amount' => 1000000, 'fiscal_year' => $year])
+            ->assertSessionHasNoErrors();
+
+        $this->assertEquals(3000000, (float) Budget::where('fiscal_year', $year)->sum('allocated_amount'));
+    }
+
+    public function test_an_allocation_needs_a_fund_and_the_fund_cannot_drop_below_it(): void
+    {
+        $officer = $this->officer();
+        $year = now()->year;
+
+        $this->actingAs($officer)
+            ->post(route('mswdo.budget.store'), ['assistance_type' => 'Medical', 'allocated_amount' => 1000, 'fiscal_year' => $year])
+            ->assertSessionHasErrors('allocated_amount');
+
+        $this->actingAs($officer)->post(route('mswdo.budget.fund.store'), ['fiscal_year' => $year, 'amount' => 5000]);
+        $this->actingAs($officer)->post(route('mswdo.budget.store'), ['assistance_type' => 'Medical', 'allocated_amount' => 4000, 'fiscal_year' => $year]);
+
+        $this->actingAs($officer)
+            ->post(route('mswdo.budget.fund.store'), ['fiscal_year' => $year, 'amount' => 3000])
+            ->assertSessionHasErrors('amount');
+    }
+
+    public function test_type_filter_shows_only_that_type(): void
+    {
+        $officer = $this->officer();
+        $this->budget($officer);
+        Budget::create(['assistance_type' => 'Burial', 'allocated_amount' => 1000, 'fiscal_year' => 2026, 'created_by' => $officer->id]);
+
+        $this->actingAs($officer)
+            ->get(route('mswdo.budget.index', ['year' => 2026, 'type' => 'Medical']))
+            ->assertOk()
+            ->assertSee('Medical releases')
+            ->assertSee('data-budget-split="' . Budget::where('assistance_type', 'Medical')->value('id') . '"', false)
+            ->assertDontSee('data-budget-split="' . Budget::where('assistance_type', 'Burial')->value('id') . '"', false);
+    }
+
+    public function test_budget_report_totals_each_assistance_type(): void
+    {
+        $officer = $this->officer();
+        $this->budget($officer);
+        Budget::create(['assistance_type' => 'Burial', 'allocated_amount' => 1000, 'fiscal_year' => 2026, 'created_by' => $officer->id]);
+
+        $this->actingAs($officer)
+            ->get(route('mswdo.reports.index', ['type' => 'budget']))
+            ->assertOk()
+            ->assertSee('Totals by Assistance Type')
+            ->assertSeeInOrder(['Medical', 'Burial', 'Educational', 'Livelihood', 'Grand Total'])
+            ->assertSee('501,000.00');
+    }
+
     public function test_budget_page_renders_action_buttons(): void
     {
         $officer = $this->officer();

@@ -149,5 +149,33 @@
             @endif
         </tbody>
     </table>
+
+    @if (! empty($report['summary']))
+        @php $summary = $report['summary']; @endphp
+        <p class="title" style="margin-top: 18px; font-size: 10.5pt;">{{ $summary['title'] }}</p>
+        <table class="data">
+            <thead>
+                <tr>
+                    @foreach ($summary['columns'] as $ci => $col)
+                        <th class="{{ in_array($ci, $summary['numeric']) ? 'num' : '' }}">{{ $col }}</th>
+                    @endforeach
+                </tr>
+            </thead>
+            <tbody>
+                @foreach ($summary['rows'] as $row)
+                    <tr>
+                        @foreach ($row as $ci => $value)
+                            <td class="{{ in_array($ci, $summary['numeric']) ? 'num' : '' }}">{{ $value }}</td>
+                        @endforeach
+                    </tr>
+                @endforeach
+                <tr class="total">
+                    @foreach ($summary['total'] as $ci => $value)
+                        <td class="{{ in_array($ci, $summary['numeric']) ? 'num' : '' }}">{{ $value }}</td>
+                    @endforeach
+                </tr>
+            </tbody>
+        </table>
+    @endif
 </body>
 </html>

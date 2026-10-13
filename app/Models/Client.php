@@ -13,11 +13,34 @@ class Client extends Model
         'last_name', 'first_name', 'middle_name', 'suffix',
         'date_of_birth', 'sex', 'civil_status', 'address',
         'barangay', 'contact_number',
+        // Family Intake Data Form
+        'intake_date', 'religion', 'birth_place', 'educational_attainment',
+        'occupation', 'monthly_income', 'purok', 'category',
+        'employment_nature', 'housing', 'water_source', 'toilet', 'light',
+        'problem_presented', 'initial_assessment', 'recommendation', 'plan_of_action',
     ];
 
     protected $casts = [
         'date_of_birth' => 'date',
+        'intake_date' => 'date',
+        'monthly_income' => 'decimal:2',
     ];
+
+    /** The options offered on the intake form; free text is still accepted. */
+    public const CATEGORIES = [
+        'Senior Citizen', 'Person with Disability (PWD)', 'Solo Parent',
+        '4Ps Beneficiary', 'Indigenous People (IP)', 'Indigent',
+        'Out-of-School Youth', 'Women in Especially Difficult Circumstances',
+        'Child in Need of Special Protection',
+    ];
+
+    public const EDUCATION_LEVELS = [
+        'No Formal Education', 'Elementary Level', 'Elementary Graduate',
+        'High School Level', 'High School Graduate', 'Senior High School Graduate',
+        'Vocational', 'College Level', 'College Graduate', 'Post Graduate',
+    ];
+
+    public const EMPLOYMENT_NATURES = ['Casual', 'Permanent', 'Temporary', 'Unemployed'];
 
     /**
      * Normalise names on the way in, not just on the way out.
@@ -98,5 +121,18 @@ class Client extends Model
     public function documents()
     {
         return $this->hasMany(Document::class);
+    }
+
+    public function familyMembers()
+    {
+        return $this->hasMany(FamilyMember::class)->orderBy('id');
+    }
+
+    /** "Purok 3, Calao, San Agustin, Isabela" — the address line as the form writes it. */
+    public static function composeAddress(?string $purok, string $barangay): string
+    {
+        $purok = trim((string) $purok);
+
+        return ($purok !== '' ? 'Purok ' . $purok . ', ' : '') . $barangay . ', San Agustin, Isabela';
     }
 }

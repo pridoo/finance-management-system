@@ -145,6 +145,39 @@
                     </div>
                 @endif
 
+                {{-- One line per assistance type plus the grand total, so the
+                     Medical / Burial / Educational / Livelihood figures do not
+                     have to be added up from the rows above by hand. --}}
+                @if(! empty($report['summary']))
+                    @php $summary = $report['summary']; @endphp
+                    <div class="border-t border-gray-200 px-5 pt-5 pb-2">
+                        <h4 class="panel-title">{{ $summary['title'] }}</h4>
+                    </div>
+                    <table class="w-full text-sm" data-report-summary>
+                        <thead class="bg-gray-50 text-xs text-gray-700 font-semibold uppercase tracking-wide">
+                            <tr>
+                                @foreach($summary['columns'] as $ci => $col)
+                                    <th class="px-5 py-3 whitespace-nowrap {{ in_array($ci, $summary['numeric']) ? 'text-right' : 'text-left' }}">{{ $col }}</th>
+                                @endforeach
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-100">
+                            @foreach($summary['rows'] as $row)
+                                <tr>
+                                    @foreach($row as $ci => $value)
+                                        <td class="px-5 py-3 whitespace-nowrap {{ in_array($ci, $summary['numeric']) ? 'text-right tabular-nums text-gray-800' : 'font-semibold text-gray-900' }}">{{ $value }}</td>
+                                    @endforeach
+                                </tr>
+                            @endforeach
+                            <tr class="bg-teal-50">
+                                @foreach($summary['total'] as $ci => $value)
+                                    <td class="px-5 py-3 whitespace-nowrap font-bold text-teal-900 {{ in_array($ci, $summary['numeric']) ? 'text-right tabular-nums' : '' }}">{{ $value }}</td>
+                                @endforeach
+                            </tr>
+                        </tbody>
+                    </table>
+                @endif
+
             @else
                 {{-- Empty state --}}
                 <div class="flex flex-col items-center justify-center px-6 py-20 text-center">

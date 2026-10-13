@@ -210,7 +210,10 @@ class PortalUiTest extends TestCase
 
     public function test_creating_an_allocation_reports_what_happened(): void
     {
-        $this->actingAs($this->officer())
+        $officer = $this->officer();
+        \App\Models\AnnualFund::create(['fiscal_year' => now()->year, 'amount' => 1000000, 'created_by' => $officer->id]);
+
+        $this->actingAs($officer)
             ->post(route('mswdo.budget.store'), [
                 'assistance_type'  => 'Medical',
                 'allocated_amount' => 500000,
@@ -225,6 +228,7 @@ class PortalUiTest extends TestCase
     {
         $officer = $this->officer();
         $this->budget($officer);
+        \App\Models\AnnualFund::create(['fiscal_year' => 2026, 'amount' => 1000000, 'created_by' => $officer->id]);
 
         // The add form tops up rather than replacing, so the message has to
         // distinguish the two or the officer cannot tell which happened.
@@ -290,6 +294,7 @@ class PortalUiTest extends TestCase
                 'assistance_type'  => 'Medical',
                 'amount_requested' => 10000,
                 'purpose'          => 'Fire victim assistance.',
+                'submitted_docs'   => \App\Support\Requirements::labels('Medical'),
             ])
             // The next step after filing is a decision, so the officer is put
             // where that happens rather than on a read-only detail page.

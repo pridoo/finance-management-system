@@ -5,7 +5,9 @@ namespace App\Http\Controllers\MSWDO;
 use App\Http\Controllers\Controller;
 use App\Models\AuditLog;
 use App\Models\Client;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class ClientController extends Controller
 {
@@ -38,22 +40,82 @@ class ClientController extends Controller
         return view('mswdo.beneficiaries.create');
     }
 
-    public function store(Request $request)
+    /**
+     * The fields of the Family Intake Data Form. Only the identifying details
+     * the rest of the system depends on are required; the household, housing
+     * and case-note sections are often completed over more than one visit.
+     */
+    private function rules(): array
     {
-        $data = $request->validate([
-            'last_name'      => 'required|string|max:100',
-            'first_name'     => 'required|string|max:100',
-            'middle_name'    => 'nullable|string|max:100',
-            'suffix'         => 'nullable|string|max:20',
-            'date_of_birth'  => 'required|date|before_or_equal:today',
-            'sex'            => 'required|in:Male,Female',
-            'civil_status'   => 'required|string|max:50',
-            'address'        => 'required|string',
-            'barangay'       => 'required|string|max:100',
+        return [
+            'intake_date'            => 'nullable|date|before_or_equal:today',
+            'last_name'              => 'required|string|max:100',
+            'first_name'             => 'required|string|max:100',
+            'middle_name'            => 'nullable|string|max:100',
+            'suffix'                 => 'nullable|string|max:20',
+            'date_of_birth'          => 'required|date|before_or_equal:today',
+            'sex'                    => 'required|in:Male,Female',
+            'civil_status'           => 'required|string|max:50',
+            'religion'               => 'nullable|string|max:60',
+            'birth_place'            => 'nullable|string|max:150',
+            'educational_attainment' => 'nullable|string|max:80',
+            'occupation'             => 'nullable|string|max:100',
+            'monthly_income'         => 'nullable|numeric|min:0|max:9999999999',
+            'purok'                  => 'nullable|string|max:30',
+            'barangay'               => 'required|string|max:100',
             // Exactly 11 digits starting 09. The model's mutator has already
             // rewritten +63/63 prefixes into this shape before storage.
-            'contact_number' => ['nullable', 'digits:11', 'regex:/^09\d{9}$/'],
-        ]);
+            'contact_number'         => ['nullable', 'digits:11', 'regex:/^09\d{9}$/'],
+            'category'               => 'nullable|string|max:60',
+
+            // B. Family composition. Rows left without a name are dropped.
+            'family'                          => 'nullable|array|max:30',
+            'family.*.name'                   => 'nullable|string|max:150',
+            'family.*.age'                    => 'nullable|integer|min:0|max:130',
+            'family.*.sex'                    => 'nullable|in:Male,Female',
+            'family.*.civil_status'           => 'nullable|string|max:50',
+            'family.*.birth_date'             => 'nullable|date|before_or_equal:today',
+            'family.*.relationship'           => 'nullable|string|max:50',
+            'family.*.educational_attainment' => 'nullable|string|max:80',
+            'family.*.occupation_income'      => 'nullable|string|max:100',
+
+            // C. Additional income
+            'employment_nature'      => 'nullable|in:' . implode(',', Client::EMPLOYMENT_NATURES),
+            'housing'                => 'nullable|string|max:255',
+            'water_source'           => 'nullable|string|max:150',
+            'toilet'                 => 'nullable|string|max:150',
+            'light'                  => 'nullable|string|max:150',
+
+            // D–G
+            'problem_presented'      => 'nullable|string|max:5000',
+            'initial_assessment'     => 'nullable|string|max:5000',
+            'recommendation'         => 'nullable|string|max:5000',
+            'plan_of_action'         => 'nullable|string|max:5000',
+        ];
+    }
+
+    /** Replace the household rows with what the form sent. */
+    private function syncFamily(Client $client, array $rows): void
+    {
+        $client->familyMembers()->delete();
+
+        foreach ($rows as $row) {
+            if (trim((string) ($row['name'] ?? '')) === '') {
+                continue;
+            }
+            $client->familyMembers()->create(array_merge(
+                array_map(fn ($v) => $v === '' ? null : $v, $row),
+                ['name' => mb_convert_case(trim($row['name']), MB_CASE_TITLE, 'UTF-8')]
+            ));
+        }
+    }
+
+    public function store(Request $request)
+    {
+        $data = $request->validate($this->rules());
+        $family = $data['family'] ?? [];
+        unset($data['family']);
+        $data['address'] = Client::composeAddress($data['purok'] ?? null, $data['barangay']);
 
         // The warning is advisory: the clerk confirms once and the same submit
         // goes through. Blocking outright would strand genuine namesakes, which
@@ -69,7 +131,12 @@ class ClientController extends Controller
             ]);
         }
 
-        $client = Client::create($data);
+        $client = DB::transaction(function () use ($data, $family) {
+            $client = Client::create($data);
+            $this->syncFamily($client, $family);
+
+            return $client;
+        });
         AuditLog::record("Created client: {$client->full_name}", 'Beneficiaries', $client->id);
 
         return redirect()->route('mswdo.beneficiaries.show', $client)
@@ -78,7 +145,7 @@ class ClientController extends Controller
 
     public function show(Request $request, Client $client)
     {
-        $client->load(['assistanceRequests.approval', 'assistanceRequests.disbursement']);
+        $client->load(['assistanceRequests.approval', 'assistanceRequests.disbursement', 'familyMembers']);
 
         $history = $client->assistanceRequests;
 
@@ -124,25 +191,30 @@ class ClientController extends Controller
 
     public function edit(Client $client)
     {
+        $client->load('familyMembers');
+
         return view('mswdo.beneficiaries.edit', compact('client'));
+    }
+
+    /**
+     * The completed Family Intake Data Form as a PDF, laid out like the paper
+     * original so it can be printed and signed by the client and the social
+     * worker.
+     */
+    public function intakePdf(Client $client)
+    {
+        $client->load('familyMembers');
+
+        return Pdf::loadView('mswdo.beneficiaries.intake-pdf', compact('client'))
+            ->setPaper('a4', 'portrait')
+            ->stream('family-intake_' . str($client->last_name)->slug() . '_' . $client->id . '.pdf');
     }
 
     public function update(Request $request, Client $client)
     {
-        $data = $request->validate([
-            'last_name'      => 'required|string|max:100',
-            'first_name'     => 'required|string|max:100',
-            'middle_name'    => 'nullable|string|max:100',
-            'suffix'         => 'nullable|string|max:20',
-            'date_of_birth'  => 'required|date|before_or_equal:today',
-            'sex'            => 'required|in:Male,Female',
-            'civil_status'   => 'required|string|max:50',
-            'address'        => 'required|string',
-            'barangay'       => 'required|string|max:100',
-            // Exactly 11 digits starting 09. The model's mutator has already
-            // rewritten +63/63 prefixes into this shape before storage.
-            'contact_number' => ['nullable', 'digits:11', 'regex:/^09\d{9}$/'],
-        ]);
+        $data = $request->validate($this->rules());
+        $family = $data['family'] ?? [];
+        unset($data['family']);
 
         if ($duplicate = $this->findDuplicate($data, $client)) {
             return back()->withInput()->with('duplicate_beneficiary', [
@@ -151,7 +223,17 @@ class ClientController extends Controller
             ]);
         }
 
-        $client->update($data);
+        // Records from before the intake form carry a free-text address and
+        // no purok. That address is kept until a purok is entered or the
+        // barangay changes, so saving an old record never wipes it.
+        if (filled($data['purok'] ?? null) || $data['barangay'] !== $client->barangay || blank($client->address)) {
+            $data['address'] = Client::composeAddress($data['purok'] ?? null, $data['barangay']);
+        }
+
+        DB::transaction(function () use ($client, $data, $family) {
+            $client->update($data);
+            $this->syncFamily($client, $family);
+        });
         AuditLog::record("Updated client: {$client->full_name}", 'Beneficiaries', $client->id);
 
         return redirect()->route('mswdo.beneficiaries.show', $client)

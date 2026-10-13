@@ -12,7 +12,7 @@
 
 @section('content')
 
-<div class="max-w-3xl mx-auto">
+<div class="max-w-6xl mx-auto">
 
     <div class="panel">
 
@@ -25,21 +25,14 @@
                 </svg>
             </div>
             <div class="min-w-0">
-                <h2 class="text-lg font-bold text-white">Add Beneficiary Profile</h2>
+                <h2 class="text-lg font-bold text-white">Family Intake Data Form</h2>
                 <p class="mt-0.5 text-sm text-teal-100">
-                    Register a new beneficiary by filling in their personal information below.
+                    Register a new beneficiary and their household, as on the office's paper intake form.
                 </p>
             </div>
         </div>
 
         <div class="p-6">
-            <h3 class="flex items-center gap-2.5 text-sm font-bold text-gray-800 mb-5 pb-4 border-b border-gray-100">
-                <span class="grid h-7 w-7 place-items-center rounded-full bg-teal-700 text-xs font-bold leading-none text-white">1</span>
-                Personal Information
-                <span class="ml-auto text-xs font-semibold text-gray-500">
-                    <span class="text-red-500">*</span> required
-                </span>
-            </h3>
 
             <form method="POST" action="{{ route('mswdo.beneficiaries.store') }}"
                   data-swal-confirm

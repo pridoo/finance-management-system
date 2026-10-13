@@ -148,7 +148,7 @@
                         <span class="w-6 h-6 rounded-full border-2 border-teal-600 text-teal-600 flex items-center justify-center text-xs font-bold leading-none">3</span>
                         Submitted Requirements
                     </h3>
-                    <p class="text-xs text-gray-500 mb-4 ml-8">Check all documents physically submitted by the beneficiary.</p>
+                    <p class="text-xs text-gray-500 mb-4 ml-8">All documents are required — tick each one as the beneficiary hands it in.</p>
                     <p data-req-empty class="text-sm text-gray-400 italic ml-8">Select a type of assistance to see its requirements.</p>
                     {{-- One group per type; only the selected one is shown. The
                          hidden groups' checkboxes are disabled so a box ticked
@@ -171,12 +171,17 @@
                     @endforeach
                 </div>
 
-                {{-- Action Buttons --}}
-                <div class="flex items-center justify-end gap-3 pb-2">
+                {{-- Action Buttons. Submit starts disabled and only unlocks once
+                     a type is chosen and every one of its requirements is
+                     ticked; the line beside it says what is still missing. --}}
+                @error('submitted_docs')<p class="form-error text-right">{{ $message }}</p>@enderror
+                <div class="flex flex-wrap items-center justify-end gap-3 pb-2">
+                    <p data-submit-hint class="mr-auto text-sm font-medium text-amber-700"></p>
                     <a href="{{ route('mswdo.requests.index') }}" class="btn-secondary px-5 py-2.5">
                         Cancel
                     </a>
-                    <button type="submit" class="btn-primary px-6 py-2.5">
+                    <button type="submit" data-submit-request disabled
+                            class="btn-primary px-6 py-2.5 disabled:cursor-not-allowed disabled:opacity-50">
                         Submit Request &nbsp;›
                     </button>
                 </div>
@@ -262,7 +267,28 @@
         document.querySelectorAll('[data-req-empty]').forEach(function (el) {
             el.classList.toggle('hidden', !!sel.value);
         });
+        updateSubmit();
     }
+
+    // Submit stays disabled until every requirement of the chosen type is
+    // ticked. Only the visible group counts — the others are disabled.
+    var submit = document.querySelector('[data-submit-request]');
+    var hint   = document.querySelector('[data-submit-hint]');
+
+    function updateSubmit() {
+        var boxes = document.querySelectorAll('input[name="submitted_docs[]"]:not(:disabled)');
+        var left  = Array.prototype.filter.call(boxes, function (box) { return !box.checked; }).length;
+        var ready = !!sel.value && boxes.length > 0 && left === 0;
+
+        submit.disabled = !ready;
+        hint.textContent = !sel.value
+            ? 'Select a type of assistance first.'
+            : (left > 0 ? left + ' requirement' + (left === 1 ? '' : 's') + ' still unchecked.' : '');
+    }
+
+    document.addEventListener('change', function (e) {
+        if (e.target.matches('input[name="submitted_docs[]"]')) updateSubmit();
+    });
 
     sel.addEventListener('change', showRequirements);
     showRequirements();
