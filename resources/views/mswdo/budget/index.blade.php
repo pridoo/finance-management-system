@@ -2,6 +2,29 @@
 @section('title', 'Budget Tracking')
 @section('page-title', 'Budget and Release Tracking')
 
+{{-- The fiscal year sits beside the page title: every figure on the page
+     belongs to it, so it is the first thing read and can be changed from the
+     top rather than from inside the allocation table. --}}
+@section('page-actions')
+    <form method="GET" action="{{ route('mswdo.budget.index') }}"
+          class="panel flex items-center gap-3 px-4 py-2.5">
+        @if ($type)
+            <input type="hidden" name="type" value="{{ $type }}">
+        @endif
+        <label for="budget-year" class="form-label mb-0! whitespace-nowrap">Fiscal Year</label>
+        {{-- A dropdown rather than a free number field: the years that can hold
+             records are a known list, and typing 2019 into a spinner only ever
+             produced an empty table. --}}
+        <select id="budget-year" name="year" onchange="this.form.submit()"
+                class="form-control w-32 py-1.5! text-lg! font-bold text-teal-800">
+            @foreach ($years as $option)
+                <option value="{{ $option }}" @selected((int) $year === $option)>{{ $option }}</option>
+            @endforeach
+        </select>
+        <noscript><button type="submit" class="btn-soft">Go</button></noscript>
+    </form>
+@endsection
+
 @section('content')
 
 @php
@@ -132,17 +155,6 @@
         <div class="panel-head">
             <h3 class="panel-title">Budget Allocation per Assistance Type</h3>
             <div class="flex flex-wrap items-center gap-3">
-                <form method="GET" action="{{ route('mswdo.budget.index') }}" class="flex items-center gap-2">
-                    <label for="budget-year" class="form-label mb-0 whitespace-nowrap">Fiscal Year</label>
-                    {{-- A dropdown rather than a free number field: the years
-                         that can hold records are a known list, and typing 2019
-                         into a spinner only ever produced an empty table. --}}
-                    <select id="budget-year" name="year" class="form-control w-28 py-1.5!" onchange="this.form.submit()">
-                        @foreach ($years as $option)
-                            <option value="{{ $option }}" @selected((int) $year === $option)>{{ $option }}</option>
-                        @endforeach
-                    </select>
-                </form>
                 @if(auth()->user()->role === 'mswdo_officer')
                     <button type="button" data-budget-add class="btn-primary shrink-0 py-2.5">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
