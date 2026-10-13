@@ -14,7 +14,7 @@
 
 @section('content')
 
-<div class="max-w-3xl mx-auto">
+<div class="max-w-6xl mx-auto">
 
     <div class="panel">
 
@@ -25,7 +25,7 @@
                 </svg>
             </div>
             <div class="min-w-0">
-                <p class="text-[11px] font-bold uppercase tracking-wider text-yellow-300">Editing beneficiary</p>
+                <p class="text-[11px] font-bold uppercase tracking-wider text-yellow-300">Family Intake Data Form</p>
                 <h2 class="mt-0.5 truncate text-lg font-bold text-white">{{ $client->full_name }}</h2>
             </div>
         </div>

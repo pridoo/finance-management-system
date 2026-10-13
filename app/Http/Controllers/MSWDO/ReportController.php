@@ -6,7 +6,9 @@ use App\Http\Controllers\Controller;
 use App\Models\AssistanceRequest;
 use App\Models\AuditLog;
 use App\Models\Budget;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class ReportController extends Controller
@@ -48,8 +50,46 @@ class ReportController extends Controller
                 fputcsv($file, $row);
             }
 
+            if (! empty($report['summary'])) {
+                fputcsv($file, []);
+                fputcsv($file, [$report['summary']['title']]);
+                fputcsv($file, $report['summary']['columns']);
+                foreach ($report['summary']['rows'] as $row) {
+                    fputcsv($file, $row);
+                }
+                fputcsv($file, $report['summary']['total']);
+            }
+
             fclose($file);
         }, $filename, ['Content-Type' => 'text/csv; charset=UTF-8']);
+    }
+
+    public function exportPdf(Request $request): Response
+    {
+        $this->validateFilters($request);
+        $report = $this->buildReport($request);
+        $filename = $request->string('type')->slug().'_report_'.now()->format('Ymd_His').'.pdf';
+
+        // Always A4 portrait, matching the office's letterhead paper.
+        $pdf = Pdf::loadView('mswdo.reports.pdf', [
+            'report' => $report,
+            'type' => $request->string('type')->toString(),
+        ])->setPaper('a4', 'portrait');
+
+        // Page numbers need the final page count, so they are stamped onto
+        // the canvas after layout rather than written into the template.
+        $pdf->render();
+        $canvas = $pdf->getDomPDF()->getCanvas();
+        $canvas->page_text(
+            $canvas->get_width() - 110,
+            $canvas->get_height() - 28,
+            'Page {PAGE_NUM} of {PAGE_COUNT}',
+            $pdf->getDomPDF()->getFontMetrics()->getFont('DejaVu Sans'),
+            8,
+            [0.4, 0.4, 0.4],
+        );
+
+        return $pdf->download($filename);
     }
 
     private function validateFilters(Request $request): void
@@ -81,6 +121,19 @@ class ReportController extends Controller
             ->latest()
             ->get();
 
+        $summaryRows = [];
+        $totals = ['count' => 0, 'requested' => 0.0, 'released' => 0.0];
+        foreach ($this->reportTypes($request) as $type) {
+            $ofType    = $records->where('assistance_type', $type);
+            $requested = (float) $ofType->sum('amount_requested');
+            $released  = (float) $ofType->sum(fn ($r) => $r->disbursement?->amount_released ?? 0);
+
+            $summaryRows[] = [$type, $ofType->count(), number_format($requested, 2), number_format($released, 2)];
+            $totals['count']     += $ofType->count();
+            $totals['requested'] += $requested;
+            $totals['released']  += $released;
+        }
+
         return [
             'title' => 'Recipient Monitoring',
             'columns' => ['Beneficiary', 'Barangay', 'Type', 'Requested', 'Released', 'Date Filed', 'Date Released'],
@@ -93,7 +146,26 @@ class ReportController extends Controller
                 $record->created_at->format('Y-m-d'),
                 $record->disbursement?->released_at?->format('Y-m-d') ?? '',
             ])->all(),
+            'summary' => [
+                'title'   => 'Totals by Assistance Type',
+                'columns' => ['Assistance Type', 'Recipients', 'Requested', 'Released'],
+                'numeric' => [1, 2, 3],
+                'rows'    => $summaryRows,
+                'total'   => ['Grand Total', $totals['count'], number_format($totals['requested'], 2), number_format($totals['released'], 2)],
+            ],
         ];
+    }
+
+    /**
+     * The assistance types a report's totals are broken down by: the one the
+     * report is filtered to, otherwise all four — listed even at zero, so a
+     * type with nothing released reads as ₱0.00 rather than being missing.
+     */
+    private function reportTypes(Request $request): array
+    {
+        return $request->assistance_type
+            ? [$request->assistance_type]
+            : ['Medical', 'Burial', 'Educational', 'Livelihood'];
     }
 
     private function budgetReport(Request $request): array
@@ -123,6 +195,36 @@ class ReportController extends Controller
                     $percent.'%',
                 ];
             })->all(),
+            'summary' => $this->budgetTotals($records, $request),
+        ];
+    }
+
+    /** Allocated / released / remaining per assistance type, plus the grand total. */
+    private function budgetTotals($records, Request $request): array
+    {
+        $row = function (string $label, $budgets) {
+            $allocated = (float) $budgets->sum('allocated_amount');
+            $released  = (float) $budgets->sum(fn (Budget $b) => $b->total_released);
+            $percent   = $allocated > 0 ? round(($released / $allocated) * 100, 1) : 0;
+
+            return [
+                $label,
+                number_format($allocated, 2),
+                number_format($released, 2),
+                number_format(max(0, $allocated - $released), 2),
+                $percent.'%',
+            ];
+        };
+
+        return [
+            'title'   => 'Totals by Assistance Type',
+            'columns' => ['Assistance Type', 'Allocated', 'Released', 'Remaining', 'Utilization'],
+            'numeric' => [1, 2, 3, 4],
+            'rows'    => array_map(
+                fn ($type) => $row($type, $records->where('assistance_type', $type)),
+                $this->reportTypes($request)
+            ),
+            'total'   => $row('Grand Total', $records),
         ];
     }
 

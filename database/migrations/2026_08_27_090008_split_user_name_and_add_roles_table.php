@@ -23,7 +23,13 @@ return new class extends Migration
             $table->timestamps();
         });
 
-        DB::statement("ALTER TABLE users MODIFY COLUMN role VARCHAR(50) NOT NULL DEFAULT 'mswdo_staff'");
+        // SQLite (the test database) has no MODIFY; the previous migration
+        // already left role there as a plain string, so there is nothing to do.
+        $mysql = DB::getDriverName() !== 'sqlite';
+
+        if ($mysql) {
+            DB::statement("ALTER TABLE users MODIFY COLUMN role VARCHAR(50) NOT NULL DEFAULT 'mswdo_staff'");
+        }
 
         DB::table('roles')->insert([
             [
@@ -75,7 +81,11 @@ return new class extends Migration
 
         // Raw statement rather than ->change(): this project does not install
         // doctrine/dbal, which Laravel 10 requires for column modification.
-        DB::statement("ALTER TABLE users MODIFY COLUMN first_name VARCHAR(100) NOT NULL");
+        // Left nullable on SQLite: the model always sets it, so the tests lose
+        // nothing by the constraint being absent.
+        if ($mysql) {
+            DB::statement("ALTER TABLE users MODIFY COLUMN first_name VARCHAR(100) NOT NULL");
+        }
     }
 
     public function down(): void
@@ -89,10 +99,12 @@ return new class extends Migration
             ->whereNotIn('role', ['admin', 'mswdo_officer', 'mswdo_staff'])
             ->update(['role' => 'mswdo_staff']);
 
-        DB::statement(
-            "ALTER TABLE users MODIFY COLUMN role
-             ENUM('admin', 'mswdo_officer', 'mswdo_staff') NOT NULL DEFAULT 'mswdo_staff'"
-        );
+        if (DB::getDriverName() !== 'sqlite') {
+            DB::statement(
+                "ALTER TABLE users MODIFY COLUMN role
+                 ENUM('admin', 'mswdo_officer', 'mswdo_staff') NOT NULL DEFAULT 'mswdo_staff'"
+            );
+        }
 
         Schema::dropIfExists('roles');
     }

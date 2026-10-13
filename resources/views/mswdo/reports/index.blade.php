@@ -76,14 +76,14 @@
             </div>
             @if($report)
                 <div data-print-hide class="flex items-center gap-2 shrink-0">
-                    <button type="button" onclick="window.print()"
-                            class="btn-secondary px-3.5 py-2 text-sm inline-flex items-center gap-1.5">
+                    <a href="{{ route('mswdo.reports.export-pdf', request()->query()) }}"
+                       class="btn-secondary px-3.5 py-2 text-sm inline-flex items-center gap-1.5">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round"
                                   d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/>
                         </svg>
                         Export PDF
-                    </button>
+                    </a>
                     <a href="{{ route('mswdo.reports.export', request()->query()) }}"
                        class="btn-secondary px-3.5 py-2 text-sm inline-flex items-center gap-1.5">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
@@ -143,6 +143,39 @@
                         <span>{{ count($report['rows']) }} released {{ count($report['rows']) === 1 ? 'request' : 'requests' }}</span>
                         <span class="font-semibold text-green-700 tabular-nums">Total Released: ₱ {{ number_format($totalRel, 2) }}</span>
                     </div>
+                @endif
+
+                {{-- One line per assistance type plus the grand total, so the
+                     Medical / Burial / Educational / Livelihood figures do not
+                     have to be added up from the rows above by hand. --}}
+                @if(! empty($report['summary']))
+                    @php $summary = $report['summary']; @endphp
+                    <div class="border-t border-gray-200 px-5 pt-5 pb-2">
+                        <h4 class="panel-title">{{ $summary['title'] }}</h4>
+                    </div>
+                    <table class="w-full text-sm" data-report-summary>
+                        <thead class="bg-gray-50 text-xs text-gray-700 font-semibold uppercase tracking-wide">
+                            <tr>
+                                @foreach($summary['columns'] as $ci => $col)
+                                    <th class="px-5 py-3 whitespace-nowrap {{ in_array($ci, $summary['numeric']) ? 'text-right' : 'text-left' }}">{{ $col }}</th>
+                                @endforeach
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-100">
+                            @foreach($summary['rows'] as $row)
+                                <tr>
+                                    @foreach($row as $ci => $value)
+                                        <td class="px-5 py-3 whitespace-nowrap {{ in_array($ci, $summary['numeric']) ? 'text-right tabular-nums text-gray-800' : 'font-semibold text-gray-900' }}">{{ $value }}</td>
+                                    @endforeach
+                                </tr>
+                            @endforeach
+                            <tr class="bg-teal-50">
+                                @foreach($summary['total'] as $ci => $value)
+                                    <td class="px-5 py-3 whitespace-nowrap font-bold text-teal-900 {{ in_array($ci, $summary['numeric']) ? 'text-right tabular-nums' : '' }}">{{ $value }}</td>
+                                @endforeach
+                            </tr>
+                        </tbody>
+                    </table>
                 @endif
 
             @else

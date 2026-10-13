@@ -7,7 +7,10 @@ use App\Models\AssistanceRequest;
 use App\Models\AuditLog;
 use App\Models\Budget;
 use App\Models\Client;
+use App\Support\Requirements;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class AssistanceRequestController extends Controller
 {
@@ -38,7 +41,8 @@ class AssistanceRequestController extends Controller
     {
         $clients = Client::orderBy('last_name')->get();
         $selectedClient = $request->client_id ? Client::find($request->client_id) : null;
-        return view('mswdo.requests.create', compact('clients', 'selectedClient'));
+        $requirements = Requirements::all();
+        return view('mswdo.requests.create', compact('clients', 'selectedClient', 'requirements'));
     }
 
     public function store(Request $request)
@@ -48,15 +52,29 @@ class AssistanceRequestController extends Controller
             'assistance_type'  => 'required|in:Medical,Burial,Educational,Livelihood',
             'amount_requested' => 'required|numeric|min:1',
             'purpose'          => 'required|string',
+            'submitted_docs'   => 'nullable|array',
+            // Only documents on the chosen type's checklist, so a Burial
+            // request cannot be stored as having an enrollment form.
+            'submitted_docs.*' => ['string', Rule::in(Requirements::labels((string) $request->input('assistance_type')))],
         ]);
+        $data['submitted_docs'] = array_values(array_unique($data['submitted_docs'] ?? []));
 
-        // Advisory, not a block: the clerk confirms once and the same submit
-        // goes through. There are legitimate reasons to file a second request
-        // of the same type — a separate hospital admission, a second child in
-        // school — so refusing outright would be wrong. What is worth stopping
-        // is the accidental re-filing of a request that is already in the
-        // queue, which is otherwise only noticed at approval time.
-        if (($open = $this->findOpenRequest($data)) && ! $request->boolean('allow_duplicate_request')) {
+        // Every document on the checklist has to be in hand before a request
+        // is filed. The form keeps Submit disabled until they are all ticked;
+        // this is the same rule for a request that skipped the form.
+        $missing = array_diff(Requirements::labels($data['assistance_type']), $data['submitted_docs']);
+        if ($missing) {
+            throw ValidationException::withMessages([
+                'submitted_docs' => 'All requirements must be submitted first. Still missing: '
+                    . implode(', ', $missing) . '.',
+            ]);
+        }
+
+        // A hard block, with no "file anyway". The office's rule is one open
+        // request per beneficiary per type: the existing one has to be
+        // released or rejected first, and a rejection stands rather than being
+        // worked around by filing the same case again.
+        if ($open = $this->findOpenRequest($data)) {
             return back()->withInput()->with('duplicate_request', [
                 'name'   => $open->client?->full_name ?? 'This beneficiary',
                 'type'   => $open->assistance_type,
@@ -95,8 +113,9 @@ class AssistanceRequestController extends Controller
             ->get();
 
         return view('mswdo.requests.show', [
-            'req'     => $assistanceRequest,
-            'budgets' => $budgets,
+            'req'          => $assistanceRequest,
+            'budgets'      => $budgets,
+            'requirements' => Requirements::labels($assistanceRequest->assistance_type),
         ]);
     }
 
@@ -117,6 +136,15 @@ class AssistanceRequestController extends Controller
             'amount_requested' => 'required|numeric|min:1',
             'purpose'          => 'required|string',
         ]);
+
+        // A change of type keeps only the submitted documents that are still
+        // on the new type's checklist; the rest no longer mean anything.
+        if ($data['assistance_type'] !== $assistanceRequest->assistance_type && $assistanceRequest->submitted_docs !== null) {
+            $data['submitted_docs'] = array_values(array_intersect(
+                $assistanceRequest->submitted_docs,
+                Requirements::labels($data['assistance_type'])
+            ));
+        }
 
         $assistanceRequest->update($data);
         AuditLog::record("Updated request #{$assistanceRequest->id}", 'Requests', $assistanceRequest->id);

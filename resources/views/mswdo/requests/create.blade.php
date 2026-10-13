@@ -117,7 +117,7 @@
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
                         <div>
                             <label class="form-label">Type of Assistance <span class="text-red-500">*</span></label>
-                            <select name="assistance_type" required class="form-control">
+                            <select name="assistance_type" id="type-select" required class="form-control">
                                 <option value="">— Select type —</option>
                                 @foreach (['Medical','Burial','Educational','Livelihood'] as $t)
                                     <option value="{{ $t }}" {{ old('assistance_type') == $t ? 'selected' : '' }}>{{ $t }}</option>
@@ -148,29 +148,40 @@
                         <span class="w-6 h-6 rounded-full border-2 border-teal-600 text-teal-600 flex items-center justify-center text-xs font-bold leading-none">3</span>
                         Submitted Requirements
                     </h3>
-                    <p class="text-xs text-gray-500 mb-4 ml-8">Check all documents physically submitted by the beneficiary.</p>
-                    <div class="space-y-3 ml-1">
-                        @foreach([
-                            'Valid government ID',
-                            'Barangay indigency certificate',
-                            'Case study report (if medical)',
-                            'Official receipt / price quote',
-                        ] as $doc)
-                            <label class="flex items-center gap-3 cursor-pointer group">
-                                <input type="checkbox" name="submitted_docs[]" value="{{ $doc }}"
-                                       class="w-4 h-4 rounded border-gray-300 text-teal-600 accent-teal-600 shrink-0">
-                                <span class="text-sm text-gray-700 group-hover:text-gray-900 transition-colors">{{ $doc }}</span>
-                            </label>
-                        @endforeach
-                    </div>
+                    <p class="text-xs text-gray-500 mb-4 ml-8">All documents are required — tick each one as the beneficiary hands it in.</p>
+                    <p data-req-empty class="text-sm text-gray-400 italic ml-8">Select a type of assistance to see its requirements.</p>
+                    {{-- One group per type; only the selected one is shown. The
+                         hidden groups' checkboxes are disabled so a box ticked
+                         under a type the clerk then changed away from is not
+                         sent with the form. --}}
+                    @foreach ($requirements as $type => $docs)
+                        <div data-req-type="{{ $type }}" class="hidden space-y-3 ml-1">
+                            @foreach ($docs as [$doc, $note])
+                                <label class="flex items-start gap-3 cursor-pointer group">
+                                    <input type="checkbox" name="submitted_docs[]" value="{{ $doc }}" disabled
+                                           @checked(old('assistance_type') === $type && in_array($doc, old('submitted_docs', []), true))
+                                           class="w-4 h-4 mt-0.5 rounded border-gray-300 text-teal-600 accent-teal-600 shrink-0">
+                                    <span class="text-sm text-gray-700 group-hover:text-gray-900 transition-colors">
+                                        {{ $doc }}
+                                        @if ($note)<span class="block text-xs text-gray-400">{{ $note }}</span>@endif
+                                    </span>
+                                </label>
+                            @endforeach
+                        </div>
+                    @endforeach
                 </div>
 
-                {{-- Action Buttons --}}
-                <div class="flex items-center justify-end gap-3 pb-2">
+                {{-- Action Buttons. Submit starts disabled and only unlocks once
+                     a type is chosen and every one of its requirements is
+                     ticked; the line beside it says what is still missing. --}}
+                @error('submitted_docs')<p class="form-error text-right">{{ $message }}</p>@enderror
+                <div class="flex flex-wrap items-center justify-end gap-3 pb-2">
+                    <p data-submit-hint class="mr-auto text-sm font-medium text-amber-700"></p>
                     <a href="{{ route('mswdo.requests.index') }}" class="btn-secondary px-5 py-2.5">
                         Cancel
                     </a>
-                    <button type="submit" class="btn-primary px-6 py-2.5">
+                    <button type="submit" data-submit-request disabled
+                            class="btn-primary px-6 py-2.5 disabled:cursor-not-allowed disabled:opacity-50">
                         Submit Request &nbsp;›
                     </button>
                 </div>
@@ -187,24 +198,20 @@
                         </svg>
                         Requirements
                     </h4>
-                    <ul class="space-y-2.5 text-xs text-gray-600">
-                        <li class="flex items-start gap-2">
-                            <span class="text-teal-500 font-bold mt-px">•</span>
-                            Valid government-issued ID
-                        </li>
-                        <li class="flex items-start gap-2">
-                            <span class="text-teal-500 font-bold mt-px">•</span>
-                            Barangay indigency certificate
-                        </li>
-                        <li class="flex items-start gap-2">
-                            <span class="text-teal-500 font-bold mt-px">•</span>
-                            Case study report <span class="text-gray-400 italic">(if medical)</span>
-                        </li>
-                        <li class="flex items-start gap-2">
-                            <span class="text-teal-500 font-bold mt-px">•</span>
-                            Official receipt or price quotation
-                        </li>
-                    </ul>
+                    <p data-req-empty class="text-xs text-gray-400 italic">Select a type of assistance.</p>
+                    @foreach ($requirements as $type => $docs)
+                        <ul data-req-type="{{ $type }}" class="hidden space-y-2.5 text-xs text-gray-600">
+                            @foreach ($docs as [$doc, $note])
+                                <li class="flex items-start gap-2">
+                                    <span class="text-teal-500 font-bold mt-px">•</span>
+                                    <span>
+                                        {{ $doc }}
+                                        @if ($note)<span class="block text-gray-400 italic">{{ $note }}</span>@endif
+                                    </span>
+                                </li>
+                            @endforeach
+                        </ul>
+                    @endforeach
                 </div>
 
                 {{-- Reminders --}}
@@ -246,6 +253,45 @@
 
     sel.addEventListener('change', fill);
     if (sel.value) fill();
+})();
+
+(function () {
+    var sel = document.getElementById('type-select');
+
+    function showRequirements() {
+        document.querySelectorAll('[data-req-type]').forEach(function (group) {
+            var on = group.dataset.reqType === sel.value;
+            group.classList.toggle('hidden', !on);
+            group.querySelectorAll('input').forEach(function (box) { box.disabled = !on; });
+        });
+        document.querySelectorAll('[data-req-empty]').forEach(function (el) {
+            el.classList.toggle('hidden', !!sel.value);
+        });
+        updateSubmit();
+    }
+
+    // Submit stays disabled until every requirement of the chosen type is
+    // ticked. Only the visible group counts — the others are disabled.
+    var submit = document.querySelector('[data-submit-request]');
+    var hint   = document.querySelector('[data-submit-hint]');
+
+    function updateSubmit() {
+        var boxes = document.querySelectorAll('input[name="submitted_docs[]"]:not(:disabled)');
+        var left  = Array.prototype.filter.call(boxes, function (box) { return !box.checked; }).length;
+        var ready = !!sel.value && boxes.length > 0 && left === 0;
+
+        submit.disabled = !ready;
+        hint.textContent = !sel.value
+            ? 'Select a type of assistance first.'
+            : (left > 0 ? left + ' requirement' + (left === 1 ? '' : 's') + ' still unchecked.' : '');
+    }
+
+    document.addEventListener('change', function (e) {
+        if (e.target.matches('input[name="submitted_docs[]"]')) updateSubmit();
+    });
+
+    sel.addEventListener('change', showRequirements);
+    showRequirements();
 })();
 </script>
 

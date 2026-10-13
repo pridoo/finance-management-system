@@ -40,6 +40,13 @@ return new class extends Migration
      */
     private function setEnum(array $values): void
     {
+        // SQLite (the test database) has no MODIFY. Its CHECK constraint still
+        // lists Emergency, which only means the tests do not enforce the
+        // narrowing; the request and budget validation rules already do.
+        if (DB::getDriverName() === 'sqlite') {
+            return;
+        }
+
         $list = implode(', ', array_map(fn ($value) => "'".$value."'", $values));
 
         foreach (['assistance_requests', 'budgets'] as $table) {

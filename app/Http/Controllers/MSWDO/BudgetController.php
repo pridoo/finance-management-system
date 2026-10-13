@@ -3,14 +3,18 @@
 namespace App\Http\Controllers\MSWDO;
 
 use App\Http\Controllers\Controller;
+use App\Models\AnnualFund;
 use App\Models\AuditLog;
 use App\Models\Budget;
 use App\Models\BudgetSubAllocation;
+use App\Models\Disbursement;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 
 class BudgetController extends Controller
 {
+    private const TYPES = ['Medical', 'Burial', 'Educational', 'Livelihood'];
+
     public function index(Request $request)
     {
         $years = $this->fiscalYears();
@@ -22,14 +26,106 @@ class BudgetController extends Controller
             $year = now()->year;
         }
 
-        $budgets = Budget::withSum('disbursements', 'amount_released')
+        // Narrows the whole page to one assistance type: the stat boxes, the
+        // allocation table and the releases list all show only that type.
+        $type = $request->get('type');
+        if (! in_array($type, self::TYPES, true)) {
+            $type = null;
+        }
+
+        $allBudgets = Budget::withSum('disbursements', 'amount_released')
             ->where('fiscal_year', $year)
             ->withSum('subAllocations', 'allocated_amount')
             ->with(['subAllocations' => fn ($q) => $q->orderByDesc('allocated_amount')])
             ->orderBy('assistance_type')
             ->get();
 
-        return view('mswdo.budget.index', compact('budgets', 'year', 'years'));
+        $budgets = $type ? $allBudgets->where('assistance_type', $type)->values() : $allBudgets;
+
+        $fund = AnnualFund::forYear($year);
+
+        $releases = Disbursement::with(['request.client', 'budget', 'releasedBy'])
+            ->whereHas('budget', fn ($q) => $q->where('fiscal_year', $year)
+                ->when($type, fn ($q) => $q->where('assistance_type', $type)))
+            ->orderByDesc('released_at')
+            ->paginate(15)
+            ->withQueryString();
+
+        return view('mswdo.budget.index', [
+            'budgets'      => $budgets,
+            'allBudgets'   => $allBudgets,
+            'year'         => $year,
+            'years'        => $years,
+            'type'         => $type,
+            'types'        => self::TYPES,
+            'fund'         => $fund,
+            'releases'     => $releases,
+        ]);
+    }
+
+    /**
+     * Set the year's whole fund. Saving again for the same year replaces the
+     * figure; it can never be set below what is already allocated out of it.
+     */
+    public function storeFund(Request $request)
+    {
+        $this->ensureOfficer();
+
+        $data = $request->validate([
+            'fiscal_year' => 'required|integer|min:2020|max:2099',
+            'amount'      => 'required|numeric|min:1|max:999999999999',
+        ]);
+
+        $fund = AnnualFund::firstOrNew(['fiscal_year' => $data['fiscal_year']]);
+        $allocated = (float) Budget::where('fiscal_year', $data['fiscal_year'])->sum('allocated_amount');
+
+        if ((float) $data['amount'] < $allocated) {
+            throw ValidationException::withMessages([
+                'amount' => 'The fund cannot be lower than the ₱' . number_format($allocated, 2)
+                    . ' already allocated to assistance types for ' . $data['fiscal_year'] . '.',
+            ]);
+        }
+
+        $previous = $fund->exists ? (float) $fund->amount : null;
+        $fund->amount = $data['amount'];
+        $fund->created_by = auth()->id();
+        $fund->save();
+
+        AuditLog::record(
+            "Set the {$fund->fiscal_year} annual fund to " . number_format((float) $fund->amount, 2)
+            . ($previous !== null ? ' (was ' . number_format($previous, 2) . ')' : ''),
+            'Budget',
+            $fund->id
+        );
+
+        return redirect()->route('mswdo.budget.index', ['year' => $fund->fiscal_year])
+            ->with('success', 'The ' . $fund->fiscal_year . ' fund is now ₱'
+                . number_format((float) $fund->amount, 2) . '.');
+    }
+
+    /**
+     * Refuse an allocation that would take a year's types past its fund.
+     *
+     * $newAmount is the figure the budget would hold afterwards; $budget is the
+     * row being changed, left out of the sum so it is not counted twice.
+     */
+    private function ensureWithinFund(int $year, float $newAmount, ?Budget $budget = null): void
+    {
+        $fund = AnnualFund::forYear($year);
+
+        if (! $fund) {
+            throw ValidationException::withMessages([
+                'allocated_amount' => "Set the {$year} annual fund first. Allocations are drawn from it.",
+            ]);
+        }
+
+        $available = (float) $fund->amount - $fund->allocatedTotal($budget?->id);
+        if ($newAmount > $available + 0.001) {
+            throw ValidationException::withMessages([
+                'allocated_amount' => 'Only ₱' . number_format(max(0, $available - (float) ($budget?->allocated_amount ?? 0)), 2)
+                    . " of the {$year} fund is left to allocate.",
+            ]);
+        }
     }
 
     /**
@@ -67,9 +163,14 @@ class BudgetController extends Controller
             'fiscal_year' => $data['fiscal_year'],
         ]);
         $toppedUp = $budget->exists;
-        $budget->allocated_amount = $toppedUp
+        $newAmount = $toppedUp
             ? (float) $budget->allocated_amount + (float) $data['allocated_amount']
-            : $data['allocated_amount'];
+            : (float) $data['allocated_amount'];
+
+        // Drawn out of the year's fund, so this can only use what is left of it.
+        $this->ensureWithinFund((int) $data['fiscal_year'], $newAmount, $toppedUp ? $budget : null);
+
+        $budget->allocated_amount = $newAmount;
         $budget->created_by = auth()->id();
         $budget->save();
         AuditLog::record("Created budget for {$budget->assistance_type} {$budget->fiscal_year}", 'Budget', $budget->id);
@@ -145,6 +246,13 @@ class BudgetController extends Controller
         }
 
         $previous = (float) $budget->allocated_amount;
+
+        // Lowering an allocation hands money back to the fund and is always
+        // allowed; raising it has to fit in what the fund has left.
+        if ((float) $data['allocated_amount'] > $previous) {
+            $this->ensureWithinFund($budget->fiscal_year, (float) $data['allocated_amount'], $budget);
+        }
+
         $budget->update(['allocated_amount' => $data['allocated_amount']]);
 
         AuditLog::record(

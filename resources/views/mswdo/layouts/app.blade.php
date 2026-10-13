@@ -37,9 +37,9 @@
     default, body copy is near-black instead of grey, and interactive targets are
     at least 44px tall.
 --}}
-{{-- A warm off-white canvas rather than a cold grey. White cards lift off it
-     cleanly, and a screen of tables stops reading as a spreadsheet. --}}
-<body class="bg-[#faf8f3] font-sans antialiased text-gray-900 text-base">
+{{-- A near-white canvas; the cream now lives on the sidebar only (see the
+     surface tokens in app.css). --}}
+<body class="bg-[#fcfcfa]font-sans antialiased text-gray-900 text-base">
 
 <div class="flex h-screen overflow-hidden app-shell">
 
@@ -117,6 +117,7 @@
      instantly close, or never appear — the handlers and the dialogs were
      talking to different instances. One source only. --}}
 @include('mswdo.partials.swal')
+@include('mswdo.partials.maintenance')
 
 </body>
 </html>

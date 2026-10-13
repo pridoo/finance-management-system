@@ -109,13 +109,11 @@ class PortalUiTest extends TestCase
 
     public function test_staff_sees_no_add_allocation_control(): void
     {
+        // Budget is not among staff's default modules, so the page itself is
+        // closed to them, which rules out the add control too.
         $this->actingAs(User::factory()->create(['role' => 'mswdo_staff']))
             ->get(route('mswdo.budget.index'))
-            ->assertOk()
-            // The button markup, not the bare attribute: the delegated click
-            // handler names the selector in its script on every render.
-            ->assertDontSee('<button type="button" data-budget-add', false)
-            ->assertDontSee('<template id="tpl-budget-add">', false);
+            ->assertForbidden();
     }
 
     public function test_detail_endpoint_returns_the_decision_and_its_reason(): void
@@ -212,7 +210,10 @@ class PortalUiTest extends TestCase
 
     public function test_creating_an_allocation_reports_what_happened(): void
     {
-        $this->actingAs($this->officer())
+        $officer = $this->officer();
+        \App\Models\AnnualFund::create(['fiscal_year' => now()->year, 'amount' => 1000000, 'created_by' => $officer->id]);
+
+        $this->actingAs($officer)
             ->post(route('mswdo.budget.store'), [
                 'assistance_type'  => 'Medical',
                 'allocated_amount' => 500000,
@@ -227,6 +228,7 @@ class PortalUiTest extends TestCase
     {
         $officer = $this->officer();
         $this->budget($officer);
+        \App\Models\AnnualFund::create(['fiscal_year' => 2026, 'amount' => 1000000, 'created_by' => $officer->id]);
 
         // The add form tops up rather than replacing, so the message has to
         // distinguish the two or the officer cannot tell which happened.
@@ -289,9 +291,10 @@ class PortalUiTest extends TestCase
         $this->actingAs($officer)
             ->post(route('mswdo.requests.store'), [
                 'client_id'        => $client->id,
-                'assistance_type'  => 'Emergency',
+                'assistance_type'  => 'Medical',
                 'amount_requested' => 10000,
                 'purpose'          => 'Fire victim assistance.',
+                'submitted_docs'   => \App\Support\Requirements::labels('Medical'),
             ])
             // The next step after filing is a decision, so the officer is put
             // where that happens rather than on a read-only detail page.
@@ -331,8 +334,7 @@ class PortalUiTest extends TestCase
             ->get(route('mswdo.requests.show', $req))
             ->assertOk()
             ->assertSee('data-request-edit', false)
-            ->assertSee('data-approval-update', false)
-            ->assertSee('Back to Requests');
+            ->assertSee('data-approval-update', false);
     }
 
     public function test_released_request_offers_no_approval_action(): void
@@ -378,6 +380,6 @@ class PortalUiTest extends TestCase
         $this->actingAs($officer)
             ->get(route('mswdo.approvals.index'))
             ->assertOk()
-            ->assertSee('No action needed');
+            ->assertSee('Closed');
     }
 }

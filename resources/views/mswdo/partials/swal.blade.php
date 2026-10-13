@@ -138,16 +138,13 @@
                 + '<span style="color:#64748b">Date filed</span><b>' + p.filed + '</b></div>'
                 + '</div>'
                 + '<p style="margin-top:12px;font-size:13px;color:#64748b">'
-                + 'File another only if this is a genuinely separate case.</p></div>',
+                + 'A new ' + p.type + ' request cannot be filed until this one is released or rejected.</p></div>',
+            // No "file anyway": the server refuses the duplicate outright, so
+            // the only ways out are to look at the open request or go back.
             showCancelButton: true,
-            showDenyButton: true,
-            // Reviewing the open request is the safe default, so it is the
-            // primary button; filing anyway is amber, not green.
             confirmButtonText: 'View existing request',
-            denyButtonText: 'File anyway',
             cancelButtonText: 'Back to form',
             confirmButtonColor: '#15803d',
-            denyButtonColor: '#d97706',
             cancelButtonColor: '#64748b',
             reverseButtons: true,
             allowOutsideClick: false,
@@ -155,23 +152,6 @@
         }).then(function (result) {
             if (result.isConfirmed) {
                 window.location.href = p.url;
-                return;
-            }
-            if (result.isDenied) {
-                var form = document.querySelector('form[action*="/requests"]');
-                if (!form) {
-                    console.error('[swal] request form not found; cannot resubmit.');
-                    return;
-                }
-                var override = document.createElement('input');
-                override.type = 'hidden';
-                override.name = 'allow_duplicate_request';
-                override.value = '1';
-                form.appendChild(override);
-                // Skip the generic save confirmation: the clerk has just
-                // answered a far more specific question.
-                form.dataset.swalConfirmed = 'yes';
-                HTMLFormElement.prototype.submit.call(form);
             }
         }).catch(function (error) {
             console.error('[swal] pending request modal failed:', error);
