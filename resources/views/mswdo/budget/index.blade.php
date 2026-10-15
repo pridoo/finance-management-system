@@ -146,6 +146,59 @@
     </div>
 @endunless
 
+{{-- Utilization: one donut per assistance type, showing how much of its
+     allocation has been released. Replaces the thin bar that used to sit in a
+     column of the table below — four charts side by side compare at a glance,
+     a column of hairline bars did not. Each card narrows the page to its type. --}}
+@php
+    $circumference = 2 * M_PI * 48;
+@endphp
+<div class="panel mb-5 p-5" data-utilization>
+    <h3 class="panel-title mb-4">Utilization</h3>
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        @foreach ($type ? [$type] : $types as $cardType)
+            @php
+                $b         = $allBudgets->firstWhere('assistance_type', $cardType);
+                $cAlloc    = $b ? (float) $b->allocated_amount : 0;
+                $cReleased = $b ? (float) $b->total_released : 0;
+                $cPct      = $cAlloc > 0 ? min(100, ($cReleased / $cAlloc) * 100) : 0;
+                // A real but tiny release still shows as a sliver, never as 0.
+                $arc       = $cPct > 0 ? max(1.5, $cPct) / 100 * $circumference : 0;
+                $stroke    = $cPct >= 90 ? '#ef4444' : ($cPct >= 70 ? '#eab308' : '#16a34a');
+                $label     = $cPct > 0 && $cPct < 1 ? '<1' : (string) round($cPct);
+            @endphp
+            <a href="{{ route('mswdo.budget.index', ['year' => $year, 'type' => $cardType]) }}"
+               class="flex flex-col items-center rounded-2xl border border-[#ece7dc] bg-white p-4 text-center transition hover:border-teal-300 hover:shadow-md
+                      {{ $type === $cardType ? 'ring-2 ring-teal-600' : '' }}">
+                <svg viewBox="0 0 120 120" class="h-32 w-32" role="img"
+                     aria-label="{{ $cardType }}: {{ $label }}% of the allocation released">
+                    <circle cx="60" cy="60" r="48" fill="none" stroke="#f1f5f9" stroke-width="14"/>
+                    @if ($arc > 0)
+                        <circle cx="60" cy="60" r="48" fill="none" stroke="{{ $stroke }}" stroke-width="14"
+                                stroke-linecap="round" transform="rotate(-90 60 60)"
+                                stroke-dasharray="{{ round($arc, 2) }} {{ round($circumference, 2) }}"/>
+                    @endif
+                    <text x="60" y="58" text-anchor="middle" font-size="22" font-weight="800" fill="#111827">{{ $label }}%</text>
+                    <text x="60" y="76" text-anchor="middle" font-size="10" font-weight="600" fill="#6b7280">released</text>
+                </svg>
+                <p class="mt-2 text-base font-bold text-gray-900">{{ $cardType }}</p>
+                @if ($b)
+                    <p class="mt-0.5 text-xs text-gray-600 tabular-nums">
+                        ₱ {{ number_format($cReleased, 2) }} of ₱ {{ number_format($cAlloc, 2) }}
+                    </p>
+                @else
+                    <p class="mt-0.5 text-xs text-gray-400">No allocation for {{ $year }}</p>
+                @endif
+            </a>
+        @endforeach
+    </div>
+    <div class="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-gray-100 pt-3 text-[11px] font-semibold text-gray-600">
+        <span class="flex items-center gap-1.5"><span class="inline-block h-2.5 w-2.5 rounded-full bg-[#16a34a]"></span> Below 70%</span>
+        <span class="flex items-center gap-1.5"><span class="inline-block h-2.5 w-2.5 rounded-full bg-[#eab308]"></span> 70–89%</span>
+        <span class="flex items-center gap-1.5"><span class="inline-block h-2.5 w-2.5 rounded-full bg-[#ef4444]"></span> 90% and up</span>
+    </div>
+</div>
+
 {{-- The table now runs the full width. Squeezed into two thirds it could not
      fit its own action column, and the Delete button was cut off the edge. --}}
 <div>
@@ -172,12 +225,11 @@
         <table class="w-full text-sm">
             <thead class="bg-gray-50 text-xs text-gray-500 uppercase tracking-wide">
                 <tr>
-                    <th class="px-5 py-3 text-left">Type</th>
-                    <th class="px-5 py-3 text-left">Allocated (₱)</th>
-                    <th class="px-5 py-3 text-left">Released (₱)</th>
-                    <th class="px-5 py-3 text-left">Balance (₱)</th>
-                    <th class="px-5 py-3 text-left">Utilization</th>
-                    <th class="px-5 py-3 text-right">Action</th>
+                    <th class="px-5 py-3 text-left w-[16%]">Type</th>
+                    <th class="px-5 py-3 text-right w-[17%]">Allocated (₱)</th>
+                    <th class="px-5 py-3 text-right w-[17%]">Released (₱)</th>
+                    <th class="px-5 py-3 text-right w-[17%]">Balance (₱)</th>
+                    <th class="pl-10 pr-5 py-3 text-right">Action</th>
                 </tr>
             </thead>
             <tbody class="divide-y divide-gray-100">
@@ -200,23 +252,10 @@
                                 </p>
                             @endif
                         </td>
-                        <td class="px-5 py-3.5 text-gray-800 tabular-nums">{{ number_format($budget->allocated_amount, 2) }}</td>
-                        <td class="px-5 py-3.5 font-semibold text-green-700 tabular-nums">{{ number_format($budget->total_released, 2) }}</td>
-                        <td class="px-5 py-3.5 font-semibold tabular-nums {{ $budget->remaining_balance < 0 ? 'text-red-700' : 'text-gray-800' }}">
+                        <td class="px-5 py-3.5 text-right text-gray-800 tabular-nums">{{ number_format($budget->allocated_amount, 2) }}</td>
+                        <td class="px-5 py-3.5 text-right font-semibold text-green-700 tabular-nums">{{ number_format($budget->total_released, 2) }}</td>
+                        <td class="px-5 py-3.5 text-right font-semibold tabular-nums {{ $budget->remaining_balance < 0 ? 'text-red-700' : 'text-gray-800' }}">
                             {{ number_format($budget->remaining_balance, 2) }}
-                        </td>
-                        <td class="px-5 py-3.5 w-40">
-                            @php $pct = $budget->allocated_amount > 0 ? min(100, round(($budget->total_released / $budget->allocated_amount) * 100)) : 0; @endphp
-                            <div class="flex items-center gap-2">
-                                {{-- Thicker than the old 1.5px hairline, which
-                                     was hard to read at a glance and vanished
-                                     entirely at low percentages. --}}
-                                <div class="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
-                                    <div class="h-2 rounded-full transition-all {{ $pct >= 90 ? 'bg-red-500' : ($pct >= 70 ? 'bg-yellow-400' : 'bg-teal-600') }}"
-                                         style="width:{{ $pct }}%"></div>
-                                </div>
-                                <span class="w-9 shrink-0 text-xs font-bold tabular-nums {{ $pct >= 90 ? 'text-red-700' : 'text-gray-700' }}">{{ $pct }}%</span>
-                            </div>
                         </td>
                         <td class="px-5 py-3.5">
                             {{-- Available to every role: reading where the money
@@ -263,12 +302,12 @@
                                               data-swal-name="the {{ $budget->assistance_type }} {{ $budget->fiscal_year }} allocation">
                                             @csrf
                                             @method('DELETE')
-                                            <button type="submit" class="btn-soft-danger"><svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>Delete</button>
+                                            <button type="submit" class="btn-soft-danger w-28 justify-center"><svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>Delete</button>
                                         </form>
                                     @else
                                         {{-- Deleting would orphan the release
                                              records that reference it. --}}
-                                        <span class="inline-flex items-center rounded-lg border border-gray-100 bg-gray-50 px-3 py-2 text-xs font-medium text-gray-400"
+                                        <span class="inline-flex w-28 justify-center items-center self-stretch rounded-lg border border-gray-100 bg-gray-50 px-3 text-sm font-medium text-gray-400"
                                               title="This allocation has released funds and can no longer be deleted.">In use</span>
                                     @endif
                                 @endif
@@ -278,7 +317,7 @@
 
                 @empty
                     <tr>
-                        <td colspan="6">
+                        <td colspan="5">
                             <div class="empty-state">
                                 <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"

@@ -19,7 +19,7 @@
                 <img src="{{ asset('images/sanagustinlogo.png') }}" alt="" class="auth-seal" aria-hidden="true">
                 <div>
                     <p class="auth-kicker">Municipality of San Agustin</p>
-                    <h1>MSWDO Assistance Portal</h1>
+                    <h1>San Agustin-MSWDO</h1>
                 </div>
             </div>
 
@@ -30,7 +30,7 @@
                     Record a beneficiary, track a request, and release assistance without leaving the system.
                 </p>
 
-                <div class="auth-metrics" aria-label="Portal capabilities">
+                <div class="auth-metrics" aria-label="System capabilities">
                     <div>
                         <strong>24/7</strong>
                         <span>Record access</span>
@@ -47,7 +47,7 @@
             </div>
         </section>
 
-        <section class="auth-panel" aria-label="Portal login form">
+        <section class="auth-panel" aria-label="Login form">
             <div class="auth-panel__header">
                 <p>Management v2.0</p>
                 <span>Authorized Access</span>
@@ -59,8 +59,8 @@
                 <div class="auth-mobile-brand">
                     <img src="{{ asset('images/sanagustinlogo.png') }}" alt="" class="auth-seal" aria-hidden="true">
                     <div>
-                        <p>San Agustin MSWDO</p>
-                        <strong>Assistance Portal</strong>
+                        <p>Municipality of San Agustin</p>
+                        <strong>San Agustin-MSWDO</strong>
                     </div>
                 </div>
 
