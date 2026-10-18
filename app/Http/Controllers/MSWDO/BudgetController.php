@@ -15,15 +15,18 @@ class BudgetController extends Controller
 {
     private const TYPES = ['Medical', 'Burial', 'Educational', 'Livelihood'];
 
+    /** The system's first fiscal year; earlier years are not recorded. */
+    public const FIRST_YEAR = 2026;
+    public const LAST_YEAR = 2099;
+
     public function index(Request $request)
     {
-        $years = $this->fiscalYears();
-        $year  = (int) $request->get('year', now()->year);
-
-        // A hand-edited ?year= in the address bar would otherwise show an empty
-        // table for a year the dropdown never offers.
-        if (! in_array($year, $years, true)) {
-            $year = now()->year;
+        // Typed in rather than picked from a list. Nothing before the first
+        // fiscal year the system covers is accepted, so a typo like 2016 lands
+        // on 2026 instead of an empty page.
+        $year = (int) $request->get('year', now()->year);
+        if ($year < self::FIRST_YEAR || $year > self::LAST_YEAR) {
+            $year = max(self::FIRST_YEAR, (int) now()->year);
         }
 
         // Narrows the whole page to one assistance type: the stat boxes, the
@@ -55,7 +58,7 @@ class BudgetController extends Controller
             'budgets'      => $budgets,
             'allBudgets'   => $allBudgets,
             'year'         => $year,
-            'years'        => $years,
+            'firstYear'    => self::FIRST_YEAR,
             'type'         => $type,
             'types'        => self::TYPES,
             'fund'         => $fund,
@@ -72,7 +75,7 @@ class BudgetController extends Controller
         $this->ensureOfficer();
 
         $data = $request->validate([
-            'fiscal_year' => 'required|integer|min:2020|max:2099',
+            'fiscal_year' => 'required|integer|min:' . self::FIRST_YEAR . '|max:' . self::LAST_YEAR,
             'amount'      => 'required|numeric|min:1|max:999999999999',
         ]);
 
@@ -128,26 +131,6 @@ class BudgetController extends Controller
         }
     }
 
-    /**
-     * The fiscal years offered in the dropdowns, newest first.
-     *
-     * The current year is the ceiling — a budget cannot be recorded against a
-     * year that has not begun, so in 2026 the list stops at 2026 and only
-     * gains 2027 once that year actually arrives. Below it sit the past years,
-     * which stay selectable so previous allocations remain readable.
-     */
-    private function fiscalYears(): array
-    {
-        $current  = (int) now()->year;
-        $earliest = (int) (Budget::min('fiscal_year') ?: $current);
-
-        // Always offer a few years of history even on a fresh database, but
-        // never let a stray back-dated record stretch the list indefinitely.
-        $start = max(min($earliest, $current - 4), $current - 10);
-
-        return array_reverse(range($start, $current));
-    }
-
     public function store(Request $request)
     {
         $this->ensureOfficer();
@@ -155,7 +138,7 @@ class BudgetController extends Controller
         $data = $request->validate([
             'assistance_type'  => 'required|in:Medical,Burial,Educational,Livelihood',
             'allocated_amount' => 'required|numeric|min:1',
-            'fiscal_year'      => 'required|integer|min:2020|max:2099',
+            'fiscal_year'      => 'required|integer|min:' . self::FIRST_YEAR . '|max:' . self::LAST_YEAR,
         ]);
 
         $budget = Budget::firstOrNew([
@@ -181,10 +164,10 @@ class BudgetController extends Controller
         return redirect()->route('mswdo.budget.index', ['year' => $budget->fiscal_year])
             ->with('success', $toppedUp
                 ? 'Added ₱' . number_format((float) $data['allocated_amount'], 2) . ' to the '
-                  . $budget->assistance_type . ' ' . $budget->fiscal_year . ' allocation, now ₱'
+                  . $budget->assistance_type . ' ' . $budget->fiscal_year . ' fund source, now ₱'
                   . number_format((float) $budget->allocated_amount, 2) . '.'
                 : 'Created the ' . $budget->assistance_type . ' ' . $budget->fiscal_year
-                  . ' allocation at ₱' . number_format((float) $budget->allocated_amount, 2) . '.');
+                  . ' fund source at ₱' . number_format((float) $budget->allocated_amount, 2) . '.');
     }
 
     /**
@@ -240,7 +223,7 @@ class BudgetController extends Controller
         // released money it never had.
         if ((float) $data['allocated_amount'] < $released) {
             throw ValidationException::withMessages([
-                'allocated_amount' => 'The allocation cannot be lower than the ₱'
+                'allocated_amount' => 'The fund source cannot be lower than the ₱'
                     . number_format($released, 2) . ' already released from it.',
             ]);
         }
@@ -256,7 +239,7 @@ class BudgetController extends Controller
         $budget->update(['allocated_amount' => $data['allocated_amount']]);
 
         AuditLog::record(
-            "Updated {$budget->assistance_type} {$budget->fiscal_year} allocation from "
+            "Updated {$budget->assistance_type} {$budget->fiscal_year} fund source from "
             . number_format($previous, 2) . ' to ' . number_format((float) $budget->allocated_amount, 2),
             'Budget',
             $budget->id
@@ -264,7 +247,7 @@ class BudgetController extends Controller
 
         return redirect()->route('mswdo.budget.index', ['year' => $budget->fiscal_year])
             ->with('success', 'The ' . $budget->assistance_type . ' ' . $budget->fiscal_year
-                . ' allocation is now ₱' . number_format((float) $budget->allocated_amount, 2)
+                . ' fund source is now ₱' . number_format((float) $budget->allocated_amount, 2)
                 . ' (was ₱' . number_format($previous, 2) . ').');
     }
 
@@ -282,7 +265,7 @@ class BudgetController extends Controller
         $budget->delete();
 
         return redirect()->route('mswdo.budget.index', ['year' => $year])
-            ->with('success', "The {$type} {$year} allocation has been deleted.");
+            ->with('success', "The {$type} {$year} fund source has been deleted.");
     }
 
     /**
@@ -318,7 +301,7 @@ class BudgetController extends Controller
         $remaining = $budget->unallocated;
         if ((float) $data['allocated_amount'] > $remaining) {
             return back()->with('error', 'Only ₱' . number_format($remaining, 2)
-                . ' of the ' . $budget->assistance_type . ' allocation is still unassigned.');
+                . ' of the ' . $budget->assistance_type . ' fund source is still unassigned.');
         }
 
         $budget->subAllocations()->create([

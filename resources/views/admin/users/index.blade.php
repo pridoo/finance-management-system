@@ -98,10 +98,9 @@
                 @php
                     $isSelf = $user->is(auth()->user());
 
-                    // An MSWDO officer sees administrator rows but cannot act
-                    // on them. The row still lists so they know the account
-                    // exists; only the buttons are withheld. The controller
-                    // refuses the same actions, so this is presentation.
+                    // Administrator rows are filtered out for an MSWDO officer
+                    // in the controller. This guard stays for an administrator
+                    // looking at another administrator's row.
                     $canManage = auth()->user()->canManage($user);
 
                     $roleLabel = $user->roleLabel();

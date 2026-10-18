@@ -122,6 +122,27 @@ class BudgetPageTest extends TestCase
             ->assertDontSee('data-budget-split="' . Budget::where('assistance_type', 'Burial')->value('id') . '"', false);
     }
 
+    public function test_fiscal_year_is_typed_and_starts_at_2026(): void
+    {
+        $officer = $this->officer();
+
+        // Years before the first fiscal year fall back to it.
+        $this->actingAs($officer)
+            ->get(route('mswdo.budget.index', ['year' => 2019]))
+            ->assertOk()
+            ->assertSee('type="number" id="budget-year" name="year" value="2026"', false)
+            ->assertSee('min="2026"', false);
+
+        // A future year can be opened and funded.
+        $this->actingAs($officer)
+            ->post(route('mswdo.budget.fund.store'), ['fiscal_year' => 2027, 'amount' => 1000])
+            ->assertSessionHasNoErrors();
+
+        $this->actingAs($officer)
+            ->post(route('mswdo.budget.fund.store'), ['fiscal_year' => 2025, 'amount' => 1000])
+            ->assertSessionHasErrors('fiscal_year');
+    }
+
     public function test_budget_report_totals_each_assistance_type(): void
     {
         $officer = $this->officer();
@@ -131,7 +152,7 @@ class BudgetPageTest extends TestCase
         $this->actingAs($officer)
             ->get(route('mswdo.reports.index', ['type' => 'budget']))
             ->assertOk()
-            ->assertSee('Totals by Assistance Type')
+            ->assertSee('Totals by Funding Source')
             ->assertSeeInOrder(['Medical', 'Burial', 'Educational', 'Livelihood', 'Grand Total'])
             ->assertSee('501,000.00');
     }

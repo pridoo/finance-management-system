@@ -56,7 +56,7 @@
                 <tr>
                     <th class="px-5 py-3 text-left">#</th>
                     <th class="px-5 py-3 text-left">Beneficiary</th>
-                    <th class="px-5 py-3 text-left">Type</th>
+                    <th class="px-5 py-3 text-left">Source of Fund</th>
                     <th class="px-5 py-3 text-left">Amount Req.</th>
                     <th class="px-5 py-3 text-left">Current Status</th>
                     <th class="px-5 py-3 text-left">Date Filed</th>
@@ -97,6 +97,11 @@
                             @php
                                 $rowBudgets = $budgetsByType[$req->assistance_type] ?? collect();
                                 $isFinal    = in_array($req->status, ['Rejected', 'Released'], true);
+                                // Staff can release but not decide: a request
+                                // still waiting for a decision has no action
+                                // for them.
+                                $awaitingDecision = in_array($req->status, ['Pending', 'Under Review'], true)
+                                    && auth()->user()->role !== 'mswdo_officer';
                             @endphp
                             <div class="flex flex-wrap items-center gap-2 whitespace-nowrap">
                             {{-- Always available, including on rejected and
@@ -122,6 +127,11 @@
                                     </svg>
                                     Closed
                                 </span>
+                            @elseif($awaitingDecision)
+                                <span class="inline-flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800"
+                                      title="Only the MSWDO Officer can approve or reject a request.">
+                                    Awaiting Officer's decision
+                                </span>
                             @else
                                 <button type="button"
                                         data-approval-row
@@ -132,6 +142,7 @@
                                         data-max="{{ number_format((float) $req->amount_requested, 2, '.', '') }}"
                                         data-store-url="{{ route('mswdo.approvals.store') }}"
                                         data-update-url="{{ route('mswdo.approvals.update', $req) }}"
+                                        data-approved-budget="{{ $req->approval?->budget_id }}"
                                         data-budgets="{{ json_encode($rowBudgets->map(fn ($b) => [
                                             'id'      => $b->id,
                                             'label'   => $b->assistance_type . ' ' . $b->fiscal_year
@@ -264,6 +275,20 @@
             // Which question to ask depends on where the request already is in
             // the workflow, so one button covers all three steps.
             if (info.status === 'Pending' || info.status === 'Under Review') {
+                var fundSources = [];
+                try {
+                    fundSources = JSON.parse(info.budgets || '[]');
+                } catch (parseError) {
+                    console.error('[approvals] could not read funding sources:', parseError);
+                }
+                var fundOptions = '<option value="">— Select funding source —</option>' +
+                    fundSources.map(function (budget) {
+                        return '<option value="' + escapeHtml(budget.id) + '">' + escapeHtml(budget.label) + '</option>';
+                    }).join('');
+
+                // Approving names the funding source the money will come from;
+                // rejecting asks for the reason instead. Only the one that
+                // applies to the chosen decision is shown.
                 var decision = await Swal.fire({
                     title: 'Record Approval Decision',
                     html:
@@ -274,8 +299,16 @@
                             '<option value="">— Select decision —</option>' +
                             '<option value="Approved">Approved</option>' +
                             '<option value="Rejected">Rejected</option></select>') +
-                        field('ap-remarks', 'Remarks',
-                            '<textarea id="ap-remarks" rows="3" class="swal2-textarea" style="margin:0;width:100%"></textarea>'),
+                        '<div id="ap-fund-wrap" style="display:none">' +
+                        field('ap-fund', 'Funding Source <span class="text-red-500">*</span>',
+                            '<select id="ap-fund" class="swal2-input" style="margin:0;width:100%">' + fundOptions + '</select>' +
+                            (fundSources.length ? '' : '<p class="mt-1 text-left text-xs text-red-700">No current ' +
+                                escapeHtml(info.type.toLowerCase()) + ' funding source. Add one in Budget Tracking first.</p>')) +
+                        '</div>' +
+                        '<div id="ap-reason-wrap" style="display:none">' +
+                        field('ap-remarks', 'Reason for Rejection',
+                            '<textarea id="ap-remarks" rows="3" class="swal2-textarea" style="margin:0;width:100%"></textarea>') +
+                        '</div>',
                     width: 560,
                     showCancelButton: true,
                     confirmButtonText: 'Save decision',
@@ -286,13 +319,29 @@
                     allowOutsideClick: false,
                     focusConfirm: false,
                     customClass: modalClasses,
+                    didOpen: function () {
+                        var select = document.getElementById('ap-decision');
+                        select.addEventListener('change', function () {
+                            document.getElementById('ap-fund-wrap').style.display = select.value === 'Approved' ? '' : 'none';
+                            document.getElementById('ap-reason-wrap').style.display = select.value === 'Rejected' ? '' : 'none';
+                        });
+                    },
                     preConfirm: function () {
                         var value = document.getElementById('ap-decision').value;
                         if (!value) {
                             Swal.showValidationMessage('Select Approved or Rejected.');
                             return false;
                         }
-                        return { decision: value, remarks: document.getElementById('ap-remarks').value.trim() };
+                        var fund = document.getElementById('ap-fund').value;
+                        if (value === 'Approved' && !fund) {
+                            Swal.showValidationMessage('Select the funding source before approving.');
+                            return false;
+                        }
+                        return {
+                            decision: value,
+                            budget_id: value === 'Approved' ? fund : '',
+                            remarks: value === 'Rejected' ? document.getElementById('ap-remarks').value.trim() : '',
+                        };
                     },
                 });
 
@@ -301,6 +350,7 @@
                 post(info.storeUrl, {
                     request_id: info.id,
                     decision: decision.value.decision,
+                    budget_id: decision.value.budget_id,
                     remarks: decision.value.remarks,
                 });
                 return;
@@ -337,25 +387,27 @@
                 }
                 var maxAmount = parseFloat(info.max) || 0;
 
-                var options = '<option value="">— Select budget —</option>' +
+                // Starts on the funding source chosen at approval.
+                var options = '<option value="">— Select funding source —</option>' +
                     budgets.map(function (budget) {
-                        return '<option value="' + escapeHtml(budget.id) + '">' + escapeHtml(budget.label) + '</option>';
+                        var picked = String(budget.id) === String(info.approvedBudget) ? ' selected' : '';
+                        return '<option value="' + escapeHtml(budget.id) + '"' + picked + '>' + escapeHtml(budget.label) + '</option>';
                     }).join('');
 
                 var warning = budgets.length
                     ? ''
                     : '<p class="mb-4 rounded-lg bg-red-50 px-3 py-2 text-left text-xs text-red-700">' +
-                      'No current ' + escapeHtml(info.type.toLowerCase()) + ' budget is available. ' +
-                      'Add a budget allocation before releasing funds.</p>';
+                      'No current ' + escapeHtml(info.type.toLowerCase()) + ' funding source is available. ' +
+                      'Add a fund source before releasing funds.</p>';
 
                 var release = await Swal.fire({
                     title: 'Record Fund Release',
                     html:
                         '<p class="mb-4 rounded-lg bg-amber-50 px-4 py-3 text-left text-sm text-amber-800">' +
                         'Funds will be recorded as released to <b>' + name + '</b> and deducted from the ' +
-                        'selected budget. This cannot be undone.</p>' +
+                        'selected funding source. This cannot be undone.</p>' +
                         warning +
-                        field('rl-budget', 'Budget Source <span class="text-red-500">*</span>',
+                        field('rl-budget', 'Funding Source <span class="text-red-500">*</span>',
                             '<select id="rl-budget" class="swal2-input" style="margin:0;width:100%">' + options + '</select>') +
                         field('rl-amount', 'Amount Released (₱) <span class="text-red-500">*</span>',
                             '<input id="rl-amount" type="number" min="0.01" step="0.01" max="' + maxAmount +
@@ -376,14 +428,14 @@
                     customClass: modalClasses,
                     preConfirm: function () {
                         if (!budgets.length) {
-                            Swal.showValidationMessage('No budget is available for this assistance type.');
+                            Swal.showValidationMessage('No funding source is available for this assistance.');
                             return false;
                         }
                         var budgetId = document.getElementById('rl-budget').value;
                         var amount   = parseFloat(document.getElementById('rl-amount').value);
 
                         if (!budgetId) {
-                            Swal.showValidationMessage('Select the budget the funds come from.');
+                            Swal.showValidationMessage('Select the funding source the funds come from.');
                             return false;
                         }
                         if (isNaN(amount) || amount <= 0) {

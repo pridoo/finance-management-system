@@ -51,6 +51,14 @@ Route::middleware(['auth', 'active', 'notviewonly'])->prefix('mswdo')->name('msw
     Route::get('/beneficiaries/{client}/intake-form', [ClientController::class, 'intakePdf'])
         ->name('beneficiaries.intake-pdf')
         ->middleware('module:beneficiaries');
+    // Family Head search for the intake form.
+    Route::get('/beneficiaries-lookup', [ClientController::class, 'lookup'])
+        ->name('beneficiaries.lookup')
+        ->middleware('module:beneficiaries');
+    // Read by the request form, so it follows the requests permission.
+    Route::get('/beneficiaries/{client}/household', [ClientController::class, 'household'])
+        ->name('beneficiaries.household')
+        ->middleware('module:requests');
     Route::resource('beneficiaries', ClientController::class)
         ->parameters(['beneficiaries' => 'client'])
         ->middleware('module:beneficiaries');

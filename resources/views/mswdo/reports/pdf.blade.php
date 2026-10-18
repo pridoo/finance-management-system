@@ -107,7 +107,7 @@
 
     <p class="title">{{ $report['title'] }} Report</p>
     <p class="meta">
-        {{ request('assistance_type') ?: 'All assistance types' }} ·
+        {{ request('assistance_type') ?: 'All fund sources' }} ·
         @if ($dateFrom || $dateTo)
             {{ $dateFrom ?: 'start' }} to {{ $dateTo ?: 'present' }}
         @else

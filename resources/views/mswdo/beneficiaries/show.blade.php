@@ -89,6 +89,7 @@
                         'Occupation'    => $client->occupation ?: '—',
                         'Income'        => $client->monthly_income !== null ? '₱ ' . number_format((float) $client->monthly_income, 2) . ' / month' : '—',
                         'Category'      => $client->category ?: '—',
+                        'Relationship to Client' => $client->client_relationship ?: '—',
                     ],
                     'Contact & Location' => [
                         'CP #'     => $client->contact_number ?: '—',
@@ -155,7 +156,7 @@
                  this says what the household has drawn and for what, which is
                  the question asked when a new request comes in. --}}
             <div class="border-b border-gray-100 bg-[#fbf9f4] px-6 py-4">
-                <p class="mb-3 text-xs font-bold uppercase tracking-wide text-gray-500">By Assistance Type</p>
+                <p class="mb-3 text-xs font-bold uppercase tracking-wide text-gray-500">By Source of Fund</p>
                 <div class="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3">
                     @foreach ($byCategory as $type => $totals)
                         <div class="rounded-xl border border-[#ece7dc] bg-white px-3.5 py-3">
@@ -211,7 +212,7 @@
                 <thead class="bg-gray-50 text-xs font-semibold uppercase tracking-wide text-gray-600">
                     <tr>
                         <th class="px-5 py-3.5 text-left">Date</th>
-                        <th class="px-5 py-3.5 text-left">Type</th>
+                        <th class="px-5 py-3.5 text-left">Source of Fund</th>
                         <th class="px-5 py-3.5 text-right">Requested</th>
                         <th class="px-5 py-3.5 text-right">Released</th>
                         <th class="px-5 py-3.5 text-left">Status</th>
@@ -292,6 +293,71 @@
     </div>
 </div>
 
+{{-- Family ledger: everything the household has received, whoever in it
+     filed. "Household" is the Family Head and every client linked to them. --}}
+<div class="panel mt-5" data-family-ledger>
+    <div class="panel-head">
+        <div>
+            <h3 class="panel-title">Family Ledger</h3>
+            <p class="mt-1 text-sm text-gray-600">
+                @if ($client->familyHead)
+                    Household of <a href="{{ route('mswdo.beneficiaries.show', $client->familyHead) }}" class="font-semibold text-teal-800 hover:underline">{{ $client->familyHead->full_name }}</a> (Family Head)
+                @else
+                    {{ $client->full_name }} is the Family Head of this household
+                @endif
+                · {{ $household->count() }} registered {{ Str::plural('member', $household->count()) }}:
+                @foreach ($household as $member)
+                    <a href="{{ route('mswdo.beneficiaries.show', $member) }}" class="text-teal-800 hover:underline">{{ $member->full_name }}</a>@if (! $loop->last), @endif
+                @endforeach
+            </p>
+        </div>
+        <a href="{{ route('mswdo.beneficiaries.create', ['family_head_id' => $client->family_head_id ?: $client->id]) }}" class="btn-soft">
+            + Add family member as client
+        </a>
+    </div>
+
+    @if ($ledgerByType->isNotEmpty())
+        <div class="flex flex-wrap gap-3 border-b border-gray-100 px-6 py-4">
+            @foreach ($ledgerByType as $type => $row)
+                <div class="rounded-xl border border-[#ece7dc] bg-white px-4 py-2.5">
+                    <p class="text-xs font-bold uppercase tracking-wide text-gray-500">{{ $type }}</p>
+                    <p class="text-sm font-semibold text-gray-900">{{ $row['count'] }} {{ Str::plural('request', $row['count']) }} · ₱ {{ number_format($row['released'], 2) }} released</p>
+                    <p class="text-xs text-gray-500">Last: {{ $row['last']?->format('M d, Y') }}</p>
+                </div>
+            @endforeach
+        </div>
+    @endif
+
+    <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+            <thead class="bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
+                <tr>
+                    <th class="px-5 py-3 text-left">Request #</th>
+                    <th class="px-5 py-3 text-left">Date Filed</th>
+                    <th class="px-5 py-3 text-left">Family Member</th>
+                    <th class="px-5 py-3 text-left">Source of Fund</th>
+                    <th class="px-5 py-3 text-right">Amount (₱)</th>
+                    <th class="px-5 py-3 text-left">Status</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100">
+                @forelse ($ledger as $row)
+                    <tr class="hover:bg-gray-50">
+                        <td class="px-5 py-3"><a href="{{ route('mswdo.requests.show', $row) }}" class="font-semibold text-teal-800 hover:underline">#{{ $row->id }}</a></td>
+                        <td class="px-5 py-3 whitespace-nowrap">{{ $row->created_at?->format('M d, Y') }}</td>
+                        <td class="px-5 py-3 font-medium text-gray-900">{{ $row->client?->full_name }}</td>
+                        <td class="px-5 py-3">{{ $row->assistance_type }}</td>
+                        <td class="px-5 py-3 text-right tabular-nums">{{ number_format((float) ($row->disbursement->amount_released ?? $row->amount_requested), 2) }}</td>
+                        <td class="px-5 py-3">{{ $row->status }}</td>
+                    </tr>
+                @empty
+                    <tr><td colspan="6" class="px-5 py-8 text-center text-gray-500">No assistance recorded for this household yet.</td></tr>
+                @endforelse
+            </tbody>
+        </table>
+    </div>
+</div>
+
 {{-- The rest of the Family Intake Data Form, full width: the household table
      needs the room, and the case notes read better as paragraphs. --}}
 <div class="panel mt-5" data-intake-details>
@@ -301,7 +367,35 @@
     </div>
 
     <div class="px-6 py-5">
-        <h4 class="intake-heading"><span>B</span> Family Composition</h4>
+        <h4 class="intake-heading"><span>A</span> Source of Information / Referring Party</h4>
+        @if ($client->has_referrer)
+            <dl class="mb-8 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                @foreach ([
+                    'Name'                   => $client->referrer_name,
+                    'Relationship to Client' => $client->referrer_relationship,
+                    'Age'                    => $client->referrer_date_of_birth?->age,
+                    'Sex'                    => $client->referrer_sex,
+                    'Civil Status'           => $client->referrer_civil_status,
+                    'Date of Birth'          => $client->referrer_date_of_birth?->format('F d, Y'),
+                    'Place of Birth'         => $client->referrer_birth_place,
+                    'Religion'               => $client->referrer_religion,
+                    'Educational Attainment' => $client->referrer_educational_attainment,
+                    'Occupation'             => $client->referrer_occupation,
+                    'Income'                 => $client->referrer_income !== null ? '₱ ' . number_format((float) $client->referrer_income, 2) . ' / month' : null,
+                    'CP #'                   => $client->referrer_contact_number,
+                    'Present Address'        => $client->referrer_address,
+                ] as $label => $value)
+                    <div class="rounded-xl bg-gray-50/70 px-4 py-3">
+                        <dt class="text-[11px] font-bold uppercase tracking-[0.08em] text-gray-500">{{ $label }}</dt>
+                        <dd class="mt-1 text-base font-medium leading-snug text-gray-900">{{ filled($value) ? $value : '—' }}</dd>
+                    </div>
+                @endforeach
+            </dl>
+        @else
+            <p class="mb-8 rounded-xl bg-gray-50 px-4 py-3 text-sm text-gray-600">None — the client came in personally.</p>
+        @endif
+
+        <h4 class="intake-heading"><span>C</span> Family Composition</h4>
         @if ($client->familyMembers->isNotEmpty())
             <div class="overflow-x-auto rounded-xl border border-[#ece7dc]">
                 <table class="w-full text-sm">
@@ -309,12 +403,13 @@
                         <tr>
                             <th class="px-4 py-2.5 text-left">Name</th>
                             <th class="px-4 py-2.5 text-left">Age</th>
-                            <th class="px-4 py-2.5 text-left">Gender</th>
+                            <th class="px-4 py-2.5 text-left">Sex</th>
                             <th class="px-4 py-2.5 text-left">Civil Status</th>
                             <th class="px-4 py-2.5 text-left">Birth-date</th>
                             <th class="px-4 py-2.5 text-left">Relationship</th>
                             <th class="px-4 py-2.5 text-left">Educational Attainment</th>
-                            <th class="px-4 py-2.5 text-left">Occupation / Income</th>
+                            <th class="px-4 py-2.5 text-left">Occupation</th>
+                            <th class="px-4 py-2.5 text-right">Monthly Income</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-gray-100">
@@ -327,7 +422,8 @@
                                 <td class="px-4 py-2.5 whitespace-nowrap">{{ $member->birth_date?->format('M d, Y') ?? '—' }}</td>
                                 <td class="px-4 py-2.5">{{ $member->relationship ?? '—' }}</td>
                                 <td class="px-4 py-2.5">{{ $member->educational_attainment ?? '—' }}</td>
-                                <td class="px-4 py-2.5">{{ $member->occupation_income ?? '—' }}</td>
+                                <td class="px-4 py-2.5">{{ $member->occupation ?? $member->occupation_income ?? '—' }}</td>
+                                <td class="px-4 py-2.5 text-right tabular-nums">{{ $member->monthly_income !== null ? '₱ ' . number_format((float) $member->monthly_income, 2) : '—' }}</td>
                             </tr>
                         @endforeach
                     </tbody>
@@ -336,16 +432,21 @@
         @else
             <p class="rounded-xl bg-gray-50 px-4 py-3 text-sm text-gray-600">No household members recorded yet.</p>
         @endif
+        <p class="mt-3 inline-block rounded-xl bg-teal-50 px-4 py-2 text-sm font-semibold text-teal-900">
+            Total Family Income: <span class="tabular-nums">₱ {{ number_format($client->family_income, 2) }}</span> / month
+        </p>
 
-        <h4 class="intake-heading mt-8"><span>C</span> Additional Income</h4>
-        <dl class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-            @foreach ([
+        <h4 class="intake-heading mt-8"><span>D</span> Additional Income</h4>
+        <dl class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            @foreach (array_filter([
                 'Nature of Employment' => $client->employment_nature,
-                'Housing'              => $client->housing,
+                'Housing Ownership'    => $client->housing_ownership,
+                'Housing Structure'    => $client->housing_structure,
+                'Housing Notes'        => $client->housing,
                 'Potable Water'        => $client->water_source,
-                'Toilet'               => $client->toilet,
-                'Light'                => $client->light,
-            ] as $label => $value)
+                'Toilet Facilities'    => $client->toilet,
+                'Household Light'      => $client->light,
+            ], fn ($v, $k) => $k !== 'Housing Notes' || filled($v), ARRAY_FILTER_USE_BOTH) as $label => $value)
                 <div class="rounded-xl bg-gray-50/70 px-4 py-3">
                     <dt class="text-[11px] font-bold uppercase tracking-[0.08em] text-gray-500">{{ $label }}</dt>
                     <dd class="mt-1 text-base font-medium leading-snug text-gray-900">{{ $value ?: '—' }}</dd>
@@ -355,10 +456,10 @@
 
         <div class="mt-8 grid grid-cols-1 lg:grid-cols-2 gap-x-8">
             @foreach ([
-                ['D', 'Problem Presented',      $client->problem_presented],
-                ['E', 'Initial Assessment',     $client->initial_assessment],
-                ['F', 'Recommendation',         $client->recommendation],
-                ['G', 'Plan of Action / Taken', $client->plan_of_action],
+                ['E', 'Problem Presented',      $client->problem_presented],
+                ['F', 'Initial Assessment',     $client->initial_assessment],
+                ['G', 'Recommendation',         $client->recommendation],
+                ['H', 'Plan of Action / Taken', $client->plan_of_action],
             ] as [$letter, $label, $value])
                 <section class="mb-6">
                     <h4 class="intake-heading"><span>{{ $letter }}</span> {{ $label }}</h4>

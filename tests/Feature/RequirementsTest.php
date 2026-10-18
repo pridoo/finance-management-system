@@ -28,11 +28,71 @@ class RequirementsTest extends TestCase
     {
         $labels = fn (string $type) => array_column(Requirements::for($type), 0);
 
-        $this->assertContains('Medical certification / abstract', $labels('Medical'));
+        $this->assertContains('Medical certificate', $labels('Medical'));
+        $this->assertContains("Doctor's prescription", $labels('Medical'));
         $this->assertContains('Death certificate', $labels('Burial'));
         $this->assertContains('Funeral contract', $labels('Burial'));
         $this->assertContains('Enrollment form', $labels('Educational'));
         $this->assertNotContains('Funeral contract', $labels('Medical'));
+    }
+
+    public function test_only_mandatory_documents_are_enforced(): void
+    {
+        // Educational: indigency and enrollment form only; the rest are optional.
+        $this->assertSame(['Barangay indigency', 'Enrollment form'], Requirements::mandatory('Educational'));
+
+        // A scholar must also submit the COG.
+        $this->assertContains('Certificate of grades (COG)', Requirements::mandatory('Educational', scholar: true));
+
+        // A referred medical client needs no personal letter.
+        $this->assertContains('Personal letter', Requirements::mandatory('Medical'));
+        $this->assertNotContains('Personal letter', Requirements::mandatory('Medical', referred: true));
+
+        // Burial: everything except the personal letter. Livelihood: nothing.
+        $this->assertNotContains('Personal letter', Requirements::mandatory('Burial'));
+        $this->assertSame([], Requirements::mandatory('Livelihood'));
+    }
+
+    public function test_a_request_without_optional_documents_is_accepted(): void
+    {
+        $officer = User::factory()->create(['role' => 'mswdo_officer']);
+
+        $this->actingAs($officer)->post(route('mswdo.requests.store'), [
+            'client_id'        => $this->client()->id,
+            'assistance_type'  => 'Educational',
+            'amount_requested' => 3000,
+            'purpose'          => 'Tuition.',
+            'submitted_docs'   => ['Barangay indigency', 'Enrollment form'],
+        ])->assertSessionHasNoErrors();
+
+        $this->assertSame(1, AssistanceRequest::count());
+    }
+
+    public function test_same_assistance_within_three_months_in_the_household_is_refused(): void
+    {
+        $officer = User::factory()->create(['role' => 'mswdo_officer']);
+        $head = $this->client();
+        $son = Client::create([
+            'first_name' => 'Pedro', 'last_name' => 'Dela Cruz', 'date_of_birth' => '2005-01-01',
+            'sex' => 'Male', 'civil_status' => 'Single', 'address' => 'Poblacion', 'barangay' => 'Santos',
+            'family_head_id' => $head->id,
+        ]);
+        AssistanceRequest::create([
+            'client_id' => $head->id, 'assistance_type' => 'Livelihood', 'amount_requested' => 5000,
+            'purpose' => 'Sari-sari store.', 'status' => 'Released', 'encoded_by' => $officer->id,
+        ]);
+
+        // The son, linked to the same Family Head, cannot file Livelihood again yet.
+        $this->actingAs($officer)->post(route('mswdo.requests.store'), [
+            'client_id' => $son->id, 'assistance_type' => 'Livelihood', 'amount_requested' => 3000,
+            'purpose' => 'Another store.',
+        ])->assertSessionHasErrors('assistance_type');
+
+        // A different assistance is fine.
+        $this->actingAs($officer)->post(route('mswdo.requests.store'), [
+            'client_id' => $son->id, 'assistance_type' => 'Educational', 'amount_requested' => 3000,
+            'purpose' => 'Tuition.', 'submitted_docs' => ['Barangay indigency', 'Enrollment form'],
+        ])->assertSessionHasNoErrors();
     }
 
     private function client(): Client

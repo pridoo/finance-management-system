@@ -44,9 +44,6 @@
         .box { display: inline-block; width: 9px; height: 9px; border: 1px solid #333; text-align: center; line-height: 9px; font-size: 7pt; margin: 0 3px 0 10px; }
         .notes { border-bottom: 1px solid #333; min-height: 34px; padding: 2px 4px; white-space: pre-line; }
 
-        table.sign { width: 100%; margin-top: 34px; border-collapse: collapse; }
-        table.sign td { width: 50%; text-align: center; padding-top: 22px; }
-        .sig { display: inline-block; width: 75%; border-top: 1px solid #333; padding-top: 2px; }
     </style>
 </head>
 <body>
@@ -73,76 +70,63 @@
         </tr>
     </table>
 
-    <table class="fields">
-        <tr>
-            <td class="label">Name of Client:</td>
-            <td class="line" style="width:30%">{!! $v($client->last_name . ($client->suffix ? ' ' . $client->suffix : '')) !!}</td>
-            <td class="line" style="width:30%">{!! $v($client->first_name) !!}</td>
-            <td class="line" style="width:30%">{!! $v($client->middle_name) !!}</td>
-        </tr>
-        <tr>
-            <td></td>
-            <td class="hint">(Last Name)</td>
-            <td class="hint">(First Name)</td>
-            <td class="hint">(Middle Name)</td>
-        </tr>
-    </table>
+    {{-- A and B are laid out like the paper form: two columns of
+         "Label : value" lines. --}}
+    @php
+        $peso = fn ($n) => $n !== null ? 'PHP ' . number_format((float) $n, 2) . ' / month' : null;
+        $sections = [
+            'A. SOURCE OF INFORMATION/REFERRING PARTY' => [
+                [['Name', $client->referrer_name], ['Religion', $client->referrer_religion]],
+                [['Age', $client->referrer_date_of_birth?->age], ['Educational Attainment', $client->referrer_educational_attainment]],
+                [['Civil Status', $client->referrer_civil_status], ['Occupation', $client->referrer_occupation]],
+                [['Sex', $client->referrer_sex], ['Present Address', $client->referrer_address]],
+                [['Date of Birth', $client->referrer_date_of_birth?->format('F d, Y')], ['Income', $peso($client->referrer_income)]],
+                [['Place of Birth', $client->referrer_birth_place], ['CP #', $client->referrer_contact_number]],
+                [['', null], ['Relationship to Client', $client->referrer_relationship]],
+            ],
+            "B. CLIENT'S INFORMATION" => [
+                [['Name', $client->full_name], ['Religion', $client->religion]],
+                [['Age', $client->date_of_birth?->age], ['Educational Attainment', $client->educational_attainment]],
+                [['Civil Status', $client->civil_status], ['Occupation', $client->occupation]],
+                [['Sex', $client->sex], ['Present Address', $client->address]],
+                [['Date of Birth', $client->date_of_birth?->format('F d, Y')], ['Income', $peso($client->monthly_income)]],
+                [['Place of Birth', $client->birth_place], ['CP #', $client->contact_number]],
+                [['Category', $client->category], ['Relationship to Client', $client->client_relationship]],
+            ],
+        ];
+    @endphp
 
-    <table class="fields">
-        <tr>
-            <td class="label">Birth Date:</td>
-            <td class="line">{!! $v($client->date_of_birth?->format('F d, Y')) !!}</td>
-            <td class="label">Age:</td>
-            <td class="line" style="width:8%">{!! $v($client->date_of_birth?->age) !!}</td>
-            <td class="label">Sex:</td>
-            <td class="line" style="width:10%">{!! $v($client->sex) !!}</td>
-            <td class="label">Civil Status:</td>
-            <td class="line">{!! $v($client->civil_status) !!}</td>
-        </tr>
-    </table>
-    <table class="fields">
-        <tr>
-            <td class="label">Religion:</td>
-            <td class="line" style="width:40%">{!! $v($client->religion) !!}</td>
-            <td class="label">Educational Attainment:</td>
-            <td class="line">{!! $v($client->educational_attainment) !!}</td>
-        </tr>
-        <tr>
-            <td class="label">Birth Place:</td>
-            <td class="line">{!! $v($client->birth_place) !!}</td>
-            <td class="label">Occupation:</td>
-            <td class="line">{!! $v($client->occupation) !!}</td>
-        </tr>
-        <tr>
-            <td class="label">Income:</td>
-            <td class="line">{!! $client->monthly_income !== null ? 'PHP ' . number_format((float) $client->monthly_income, 2) . ' / month' : '&nbsp;' !!}</td>
-            <td class="label">CP#:</td>
-            <td class="line">{!! $v($client->contact_number) !!}</td>
-        </tr>
-    </table>
-    <table class="fields">
-        <tr>
-            <td class="label">Address: Purok</td>
-            <td class="line" style="width:8%">{!! $v($client->purok) !!}</td>
-            <td class="line" style="width:30%">{!! $v($client->barangay) !!}</td>
-            <td class="label">, San Agustin, Isabela</td>
-            <td class="label">&nbsp;&nbsp;Category:</td>
-            <td class="line">{!! $v($client->category) !!}</td>
-        </tr>
-    </table>
+    @foreach ($sections as $heading => $lines)
+        <h2>{{ $heading }}</h2>
+        <table class="fields">
+            @foreach ($lines as $pair)
+                <tr>
+                    @foreach ($pair as [$label, $value])
+                        @if ($label === '')
+                            <td colspan="2" style="width:50%"></td>
+                        @else
+                            <td class="label">{{ $label }}:</td>
+                            <td class="line" style="width:{{ $loop->first ? '32%' : '30%' }}">{!! $v($value) !!}</td>
+                        @endif
+                    @endforeach
+                </tr>
+            @endforeach
+        </table>
+    @endforeach
 
-    <h2>B. Family Composition</h2>
+    <h2>C. Family Composition</h2>
     <table class="grid">
         <thead>
             <tr>
                 <th style="width:24%">Name</th>
                 <th>Age</th>
-                <th>Gender</th>
+                <th>Sex</th>
                 <th>Civil Status</th>
                 <th>Birth-date</th>
                 <th>Relationship to client</th>
                 <th>Educational Attainment</th>
-                <th>Occupation/ Income</th>
+                <th>Occupation</th>
+                <th>Monthly Income</th>
             </tr>
         </thead>
         <tbody>
@@ -155,16 +139,18 @@
                     <td>{{ $m->birth_date?->format('m/d/Y') }}</td>
                     <td>{{ $m->relationship }}</td>
                     <td>{{ $m->educational_attainment }}</td>
-                    <td>{{ $m->occupation_income }}</td>
+                    <td>{{ $m->occupation ?? $m->occupation_income }}</td>
+                    <td>{{ $m->monthly_income !== null ? number_format((float) $m->monthly_income, 2) : '' }}</td>
                 </tr>
             @endforeach
             @for ($i = 0; $i < $blankRows; $i++)
-                <tr>@for ($c = 0; $c < 8; $c++)<td>&nbsp;</td>@endfor</tr>
+                <tr>@for ($c = 0; $c < 9; $c++)<td>&nbsp;</td>@endfor</tr>
             @endfor
         </tbody>
     </table>
+    <p style="margin: 4px 0 0; text-align: right;"><b>Total Family Income:</b> PHP {{ number_format($client->family_income, 2) }} / month</p>
 
-    <h2>C. Additional Income:</h2>
+    <h2>D. Additional Income:</h2>
     <p style="margin: 2px 0 4px">1. Nature of Employment:
         @foreach (\App\Models\Client::EMPLOYMENT_NATURES as $nature)
             <span class="box">{{ $client->employment_nature === $nature ? 'X' : '' }}</span>{{ $nature }}
@@ -172,27 +158,21 @@
     </p>
     <p style="margin: 6px 0 2px">2. Describing housing &amp; other condition:</p>
     <table class="fields">
-        <tr><td class="label">A. Housing (structure, materials space):</td><td class="line">{!! $v($client->housing) !!}</td></tr>
+        <tr><td class="label">A. Housing (structure, materials space):</td><td class="line">{!! $v(collect([$client->housing_ownership, $client->housing_structure, $client->housing])->filter()->join(', ')) !!}</td></tr>
         <tr><td class="label">B. Use and source of potable water:</td><td class="line">{!! $v($client->water_source) !!}</td></tr>
-        <tr><td class="label">C. Toilet:</td><td class="line">{!! $v($client->toilet) !!}</td></tr>
-        <tr><td class="label">D. Light:</td><td class="line">{!! $v($client->light) !!}</td></tr>
+        <tr><td class="label">C. Toilet Facilities:</td><td class="line">{!! $v($client->toilet) !!}</td></tr>
+        <tr><td class="label">D. Household Light:</td><td class="line">{!! $v($client->light) !!}</td></tr>
     </table>
 
     @foreach ([
-        ['D. Problem Presented:',      $client->problem_presented],
-        ['E. Initial Assessment:',     $client->initial_assessment],
-        ['F. Recommendation:',         $client->recommendation],
-        ['G. Plan of Action/Taken:',   $client->plan_of_action],
+        ['E. Problem Presented:',      $client->problem_presented],
+        ['F. Initial Assessment:',     $client->initial_assessment],
+        ['G. Recommendation:',         $client->recommendation],
+        ['H. Plan of Action/Taken:',   $client->plan_of_action],
     ] as [$label, $value])
         <h2>{{ $label }}</h2>
         <div class="notes">{{ $value }}</div>
     @endforeach
 
-    <table class="sign">
-        <tr>
-            <td>&nbsp;<br><span class="sig">Social Worker</span></td>
-            <td>{{ $client->full_name }}<br><span class="sig">Signature over printed name of client</span></td>
-        </tr>
-    </table>
 </body>
 </html>

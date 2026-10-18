@@ -13,12 +13,13 @@
              since its days belong to the year being left behind. --}}
         <input type="hidden" name="month" value="{{ $month }}">
         <label for="dash-year" class="text-xs font-bold uppercase tracking-wide text-gray-500 whitespace-nowrap">Fiscal Year</label>
-        <select id="dash-year" name="year" onchange="this.form.submit()"
-                class="rounded-xl border border-[#ece7dc] bg-white px-3 py-2 text-sm font-bold text-gray-900 transition hover:border-teal-400 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500">
-            @foreach ($years as $option)
-                <option value="{{ $option }}" @selected($year === $option)>{{ $option }}</option>
-            @endforeach
-        </select>
+        {{-- Typed in, from the system's first fiscal year — the same field
+             as on Budget Tracking. --}}
+        <input type="number" id="dash-year" name="year" value="{{ $year }}"
+               min="{{ $firstYear }}" max="2099" step="1" required inputmode="numeric"
+               onchange="this.form.requestSubmit()"
+               class="w-28 rounded-xl border border-[#ece7dc] bg-white px-3 py-2 text-sm font-bold tabular-nums text-gray-900 transition hover:border-teal-400 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500">
+        <button type="submit" class="btn-soft">Go</button>
     </form>
 @endsection
 
@@ -29,7 +30,7 @@
         <svg class="w-5 h-5 shrink-0 text-amber-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
         </svg>
-        You are viewing the past fiscal year {{ $year }} — these are not current figures.
+        You are viewing fiscal year {{ $year }}, not the current year — these are not today's figures.
     </div>
 @endunless
 
@@ -118,7 +119,7 @@
                 <thead class="bg-gray-50 text-xs text-gray-500 uppercase tracking-wide">
                     <tr>
                         <th class="px-5 py-3 text-left">Beneficiary</th>
-                        <th class="px-5 py-3 text-left">Type</th>
+                        <th class="px-5 py-3 text-left">Source of Fund</th>
                         <th class="px-5 py-3 text-left">Amount</th>
                         <th class="px-5 py-3 text-left">Status</th>
                     </tr>
@@ -172,7 +173,7 @@
 
     {{-- Budget Utilization --}}
     <div class="lg:col-span-2 panel p-5">
-        <h3 class="panel-title is-accent mb-1">Budget Utilization</h3>
+        <h3 class="panel-title is-accent mb-1">Utilization by Funding Source</h3>
         {{-- The window has to be stated: "60% utilised" means something
              different over four months than over the whole year. --}}
         <p class="mb-3 text-xs font-semibold text-gray-600">
@@ -300,6 +301,93 @@
         @endif
     </div>
 
+</div>
+
+
+{{-- Breakdown by funding source: recipients, releases and what is left in
+     each, for the year. A row opens that funding source on Budget Tracking. --}}
+<div class="grid grid-cols-1 xl:grid-cols-5 gap-5 mt-5">
+    <div class="xl:col-span-3 panel" data-fund-breakdown>
+        <div class="panel-head">
+            <h3 class="panel-title">Breakdown by Funding Source — FY {{ $year }}</h3>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead class="bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
+                    <tr>
+                        <th class="px-5 py-3 text-left">Fund Source</th>
+                        <th class="px-5 py-3 text-right">Recipients</th>
+                        <th class="px-5 py-3 text-right">Releases</th>
+                        <th class="px-5 py-3 text-right">Released (₱)</th>
+                        <th class="px-5 py-3 text-right">Remaining (₱)</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-100">
+                    @forelse ($fundBreakdown as $row)
+                        <tr class="hover:bg-gray-50">
+                            <td class="px-5 py-3">
+                                <a href="{{ $row['url'] }}" class="font-semibold text-teal-800 hover:underline">{{ $row['type'] }}</a>
+                            </td>
+                            <td class="px-5 py-3 text-right tabular-nums">{{ $row['recipients'] }}</td>
+                            <td class="px-5 py-3 text-right tabular-nums">{{ $row['releases'] }}</td>
+                            <td class="px-5 py-3 text-right font-semibold tabular-nums text-green-700">{{ number_format($row['released'], 2) }}</td>
+                            <td class="px-5 py-3 text-right tabular-nums">{{ number_format($row['remaining'], 2) }}</td>
+                        </tr>
+                    @empty
+                        <tr><td colspan="5" class="px-5 py-8 text-center text-gray-500">No funding sources for {{ $year }}.</td></tr>
+                    @endforelse
+                </tbody>
+                @if ($fundBreakdown->isNotEmpty())
+                    <tfoot class="bg-teal-50 font-bold text-teal-900">
+                        <tr>
+                            <td class="px-5 py-3">Total</td>
+                            <td class="px-5 py-3 text-right tabular-nums">{{ $fundBreakdown->sum('recipients') }}</td>
+                            <td class="px-5 py-3 text-right tabular-nums">{{ $fundBreakdown->sum('releases') }}</td>
+                            <td class="px-5 py-3 text-right tabular-nums">{{ number_format($fundBreakdown->sum('released'), 2) }}</td>
+                            <td class="px-5 py-3 text-right tabular-nums">{{ number_format($fundBreakdown->sum('remaining'), 2) }}</td>
+                        </tr>
+                    </tfoot>
+                @endif
+            </table>
+        </div>
+    </div>
+
+    {{-- Daily count of processed requests, with a running total of decisions
+         for the month. --}}
+    <div class="xl:col-span-2 panel" data-daily-processed>
+        <div class="panel-head">
+            <h3 class="panel-title is-accent">Daily Processed Requests — {{ $dailyMonthName }}</h3>
+        </div>
+        <div class="max-h-96 overflow-y-auto">
+            <table class="w-full text-sm">
+                <thead class="sticky top-0 bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
+                    <tr>
+                        <th class="px-4 py-2.5 text-left">Date</th>
+                        <th class="px-4 py-2.5 text-right">Filed</th>
+                        <th class="px-4 py-2.5 text-right">Decided</th>
+                        <th class="px-4 py-2.5 text-right">Released</th>
+                        <th class="px-4 py-2.5 text-right">Cumulative</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-100">
+                    @forelse ($dailyProcessed->reverse() as $day)
+                        <tr class="{{ $day['filed'] + $day['decided'] + $day['released'] > 0 ? '' : 'text-gray-400' }}">
+                            <td class="px-4 py-2 whitespace-nowrap">{{ $day['date']->format('M d, D') }}</td>
+                            <td class="px-4 py-2 text-right tabular-nums">{{ $day['filed'] }}</td>
+                            <td class="px-4 py-2 text-right tabular-nums">{{ $day['decided'] }}</td>
+                            <td class="px-4 py-2 text-right tabular-nums">{{ $day['released'] }}</td>
+                            <td class="px-4 py-2 text-right font-semibold tabular-nums text-teal-800">{{ $day['cumulative'] }}</td>
+                        </tr>
+                    @empty
+                        <tr><td colspan="5" class="px-4 py-8 text-center text-gray-500">No days to show yet.</td></tr>
+                    @endforelse
+                </tbody>
+            </table>
+        </div>
+        <p class="border-t border-gray-100 px-4 py-2.5 text-xs text-gray-500">
+            <b>Decided</b> = approved or rejected that day. <b>Cumulative</b> = decisions so far this month.
+        </p>
+    </div>
 </div>
 
 @endsection

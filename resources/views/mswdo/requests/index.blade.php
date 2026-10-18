@@ -87,7 +87,7 @@
                 <tr>
                     <th class="px-5 py-3 text-left">#</th>
                     <th class="px-5 py-3 text-left">Beneficiary</th>
-                    <th class="px-5 py-3 text-left">Type</th>
+                    <th class="px-5 py-3 text-left">Source of Fund</th>
                     <th class="px-5 py-3 text-left">Amount</th>
                     <th class="px-5 py-3 text-left">Status</th>
                     <th class="px-5 py-3 text-left">Date</th>

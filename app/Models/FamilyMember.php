@@ -10,11 +10,13 @@ class FamilyMember extends Model
     protected $fillable = [
         'client_id', 'name', 'age', 'sex', 'civil_status', 'birth_date',
         'relationship', 'educational_attainment', 'occupation_income',
+        'occupation', 'monthly_income',
     ];
 
     protected $casts = [
         'birth_date' => 'date',
         'age' => 'integer',
+        'monthly_income' => 'decimal:2',
     ];
 
     public function client()

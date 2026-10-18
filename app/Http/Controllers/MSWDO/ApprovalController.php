@@ -16,7 +16,7 @@ class ApprovalController extends Controller
 {
     public function index(Request $request)
     {
-        $requests = AssistanceRequest::with('client')
+        $requests = AssistanceRequest::with(['client', 'approval'])
             ->when($request->status, fn ($q) => $q->where('status', $request->status))
             ->latest()->paginate(25)->withQueryString();
 
@@ -33,7 +33,7 @@ class ApprovalController extends Controller
 
     public function show(Request $request, AssistanceRequest $approval)
     {
-        $approval->load(['client', 'encoder', 'approval.recorder', 'disbursement.releasedBy']);
+        $approval->load(['client', 'encoder', 'approval.recorder', 'approval.budget', 'disbursement.releasedBy']);
 
         // The index pages open the full picture in a modal rather than
         // navigating away, so the same record is served as JSON on request.
@@ -67,7 +67,14 @@ class ApprovalController extends Controller
                 'decision'    => $req->approval->decision,
                 // The reason the decision went the way it did is the whole
                 // point of opening this: surfaced, never left as a dash.
-                'remarks'     => $req->approval->remarks ?: 'No reason recorded.',
+                'remarks'     => $req->approval->decision === 'Approved'
+                    ? 'Funding source: ' . ($req->approval->budget
+                        ? $req->approval->budget->assistance_type . ' FY ' . $req->approval->budget->fiscal_year
+                        : 'not recorded')
+                    : ($req->approval->remarks ?: 'No reason recorded.'),
+                'funding_source' => $req->approval->budget
+                    ? $req->approval->budget->assistance_type . ' FY ' . $req->approval->budget->fiscal_year
+                    : null,
                 'decided_at'  => $req->approval->decided_at?->format('M d, Y h:i A'),
                 'recorded_by' => $req->approval->recorder?->name ?? '—',
             ] : null,
@@ -146,7 +153,12 @@ class ApprovalController extends Controller
         $data = $request->validate([
             'request_id' => 'required|exists:assistance_requests,id',
             'decision'   => 'required|in:Approved,Rejected',
+            // An approval names the funding source the money will come from;
+            // a rejection carries the reason instead.
+            'budget_id'  => 'required_if:decision,Approved|nullable|exists:budgets,id',
             'remarks'    => 'nullable|string',
+        ], [
+            'budget_id.required_if' => 'Select the funding source before approving.',
         ]);
 
         $assistanceRequest = DB::transaction(function () use ($data) {
@@ -158,12 +170,23 @@ class ApprovalController extends Controller
                 ]);
             }
 
+            $approved = $data['decision'] === 'Approved';
+            if ($approved) {
+                $budget = Budget::findOrFail($data['budget_id']);
+                if ($budget->assistance_type !== $assistanceRequest->assistance_type || $budget->fiscal_year !== now()->year) {
+                    throw ValidationException::withMessages([
+                        'budget_id' => 'Select a current funding source for ' . $assistanceRequest->assistance_type . '.',
+                    ]);
+                }
+            }
+
             Approval::updateOrCreate(
                 ['request_id' => $data['request_id']],
                 [
                     'recorded_by' => auth()->id(),
                     'decision'    => $data['decision'],
-                    'remarks'     => $data['remarks'] ?? null,
+                    'budget_id'   => $approved ? $data['budget_id'] : null,
+                    'remarks'     => $approved ? null : ($data['remarks'] ?? null),
                     'decided_at'  => now(),
                 ]
             );
@@ -189,12 +212,13 @@ class ApprovalController extends Controller
 
     public function update(Request $request, AssistanceRequest $approval)
     {
-        $this->ensureOfficer();
+        $this->ensureCanRelease();
 
         $data = $request->validate([
             'status'        => 'required|in:For Release,Released',
             'amount_released'=> 'required_if:status,Released|nullable|numeric|min:0',
-            'budget_id'     => 'required_if:status,Released|nullable|exists:budgets,id',
+            // Defaults to the funding source chosen at approval.
+            'budget_id'     => 'nullable|exists:budgets,id',
             'remarks'       => 'nullable|string',
         ]);
 
@@ -212,11 +236,16 @@ class ApprovalController extends Controller
                     throw ValidationException::withMessages(['status' => 'This request is not eligible for release.']);
                 }
 
-                $budget = Budget::lockForUpdate()->findOrFail($data['budget_id']);
+                $budgetId = $data['budget_id'] ?? $approval->approval?->budget_id;
+                if (! $budgetId) {
+                    throw ValidationException::withMessages(['budget_id' => 'Select the funding source the funds come from.']);
+                }
+
+                $budget = Budget::lockForUpdate()->findOrFail($budgetId);
                 $amount = (float) $data['amount_released'];
 
                 if ($budget->assistance_type !== $approval->assistance_type || $budget->fiscal_year !== now()->year) {
-                    throw ValidationException::withMessages(['budget_id' => 'Select a current budget for the same assistance type.']);
+                    throw ValidationException::withMessages(['budget_id' => 'Select a current funding source for the same assistance.']);
                 }
 
                 if ($amount > (float) $approval->amount_requested) {
@@ -250,8 +279,19 @@ class ApprovalController extends Controller
             : "Request #{$approval->id} for {$name} is now queued <b>for release</b>.");
     }
 
+    /** Approving or rejecting is the MSWDO Officer's call alone. */
     private function ensureOfficer(): void
     {
         abort_unless(auth()->user()?->role === 'mswdo_officer', 403);
+    }
+
+    /**
+     * Releasing — marking an approved request for release and recording the
+     * release — is shared by the Officer and the MSWDO Staff. The Staff can
+     * carry out a decision but never make one.
+     */
+    private function ensureCanRelease(): void
+    {
+        abort_unless(in_array(auth()->user()?->role, ['mswdo_officer', 'mswdo_staff'], true), 403);
     }
 }

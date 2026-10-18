@@ -136,7 +136,7 @@ class ReportController extends Controller
 
         return [
             'title' => 'Recipient Monitoring',
-            'columns' => ['Beneficiary', 'Barangay', 'Type', 'Requested', 'Released', 'Date Filed', 'Date Released'],
+            'columns' => ['Beneficiary', 'Barangay', 'Fund Source', 'Requested', 'Released', 'Date Filed', 'Date Released'],
             'rows' => $records->map(fn ($record) => [
                 $record->client->full_name,
                 $record->client->barangay,
@@ -147,8 +147,8 @@ class ReportController extends Controller
                 $record->disbursement?->released_at?->format('Y-m-d') ?? '',
             ])->all(),
             'summary' => [
-                'title'   => 'Totals by Assistance Type',
-                'columns' => ['Assistance Type', 'Recipients', 'Requested', 'Released'],
+                'title'   => 'Totals by Funding Source',
+                'columns' => ['Fund Source', 'Recipients', 'Requested', 'Released'],
                 'numeric' => [1, 2, 3],
                 'rows'    => $summaryRows,
                 'total'   => ['Grand Total', $totals['count'], number_format($totals['requested'], 2), number_format($totals['released'], 2)],
@@ -180,7 +180,7 @@ class ReportController extends Controller
 
         return [
             'title' => 'Budget Utilization',
-            'columns' => ['Fiscal Year', 'Assistance Type', 'Allocated', 'Released', 'Remaining', 'Utilization'],
+            'columns' => ['Fiscal Year', 'Fund Source', 'Allocated', 'Released', 'Remaining', 'Utilization'],
             'rows' => $records->map(function (Budget $budget) {
                 $percent = (float) $budget->allocated_amount > 0
                     ? round(($budget->total_released / (float) $budget->allocated_amount) * 100, 1)
@@ -217,8 +217,8 @@ class ReportController extends Controller
         };
 
         return [
-            'title'   => 'Totals by Assistance Type',
-            'columns' => ['Assistance Type', 'Allocated', 'Released', 'Remaining', 'Utilization'],
+            'title'   => 'Totals by Funding Source',
+            'columns' => ['Fund Source', 'Allocated', 'Released', 'Remaining', 'Utilization'],
             'numeric' => [1, 2, 3, 4],
             'rows'    => array_map(
                 fn ($type) => $row($type, $records->where('assistance_type', $type)),

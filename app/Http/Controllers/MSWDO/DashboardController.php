@@ -14,14 +14,13 @@ class DashboardController extends Controller
 {
     public function index(Request $request)
     {
-        $years = $this->fiscalYears();
-        $year  = (int) $request->get('year', now()->year);
-
-        // A hand-edited ?year= would otherwise show an empty dashboard for a
-        // year the dropdown never offers.
-        if (! in_array($year, $years, true)) {
-            $year = now()->year;
+        // Typed in, from the first fiscal year the system covers - the same rule
+        // as Budget Tracking. Anything outside that falls back to this year.
+        $year = (int) $request->get('year', now()->year);
+        if ($year < BudgetController::FIRST_YEAR || $year > BudgetController::LAST_YEAR) {
+            $year = max(BudgetController::FIRST_YEAR, (int) now()->year);
         }
+        $firstYear = BudgetController::FIRST_YEAR;
 
         $isCurrentYear = $year === (int) now()->year;
 
@@ -122,10 +121,68 @@ class DashboardController extends Controller
             $m => Carbon::create($year, $m, 1)->format('F'),
         ]);
 
+        // Breakdown per funding source for the year: how many recipients each
+        // one has paid, how much it released, and what is left. Each row links
+        // to that funding source on Budget Tracking.
+        $recipientsPerBudget = Disbursement::query()
+            ->join('assistance_requests', 'assistance_requests.id', '=', 'disbursements.request_id')
+            ->whereIn('disbursements.budget_id', $budgets->pluck('id'))
+            ->selectRaw('disbursements.budget_id, COUNT(DISTINCT assistance_requests.client_id) AS recipients, COUNT(*) AS releases')
+            ->groupBy('disbursements.budget_id')
+            ->get()
+            ->keyBy('budget_id');
+
+        $fundBreakdown = $budgets->map(fn ($b) => [
+            'type'       => $b->assistance_type,
+            'allocated'  => (float) $b->allocated_amount,
+            'released'   => $b->total_released,
+            'remaining'  => $b->remaining_balance,
+            'recipients' => (int) ($recipientsPerBudget[$b->id]->recipients ?? 0),
+            'releases'   => (int) ($recipientsPerBudget[$b->id]->releases ?? 0),
+            'url'        => route('mswdo.budget.index', ['year' => $year, 'type' => $b->assistance_type]),
+        ]);
+
+        // Daily count of requests processed — filed, decided (approved or
+        // rejected) and released — with a running total of decisions for the
+        // month. Shows the chosen month, otherwise the current one.
+        $dailyMonth = $month !== 'all' ? (int) $month : ($isCurrentYear ? now()->month : 1);
+        $dayStart   = Carbon::create($year, $dailyMonth, 1)->startOfDay();
+        $dayEnd     = $dayStart->copy()->endOfMonth();
+        if ($dayEnd->isFuture()) {
+            $dayEnd = now()->endOfDay();
+        }
+
+        $perDay = fn ($query, string $column) => $query
+            ->whereBetween($column, [$dayStart, $dayEnd])
+            ->selectRaw("DATE({$column}) AS day, COUNT(*) AS total")
+            ->groupByRaw("DATE({$column})")
+            ->pluck('total', 'day');
+
+        $filedPerDay    = $perDay(AssistanceRequest::query(), 'created_at');
+        $decidedPerDay  = $perDay(\App\Models\Approval::query(), 'decided_at');
+        $releasedPerDay = $perDay(Disbursement::query(), 'released_at');
+
+        $dailyProcessed = collect();
+        $running = 0;
+        for ($day = $dayStart->copy(); $dayStart->lte($dayEnd) && $day->lte($dayEnd); $day->addDay()) {
+            $key = $day->toDateString();
+            $decided = (int) ($decidedPerDay[$key] ?? 0);
+            $running += $decided;
+            $dailyProcessed->push([
+                'date'       => $day->copy(),
+                'filed'      => (int) ($filedPerDay[$key] ?? 0),
+                'decided'    => $decided,
+                'released'   => (int) ($releasedPerDay[$key] ?? 0),
+                'cumulative' => $running,
+            ]);
+        }
+        $dailyMonthName = $dayStart->format('F Y');
+
         return view('mswdo.dashboard.index', compact(
             'totalClients', 'activeRequests', 'releasedTotal', 'isCurrentYear',
-            'budgetRemaining', 'recentRequests', 'budgetUtilization', 'year', 'years',
-            'budgetPie', 'releasedInWindow', 'from', 'to', 'isFullYear', 'month', 'months'
+            'budgetRemaining', 'recentRequests', 'budgetUtilization', 'year', 'firstYear',
+            'budgetPie', 'releasedInWindow', 'from', 'to', 'isFullYear', 'month', 'months',
+            'fundBreakdown', 'dailyProcessed', 'dailyMonthName'
         ));
     }
 
@@ -170,20 +227,5 @@ class DashboardController extends Controller
             // rather than break the page.
             return null;
         }
-    }
-
-    /**
-     * The fiscal years offered in the picker, newest first.
-     *
-     * Mirrors the Budget Tracking page: the current year is the ceiling, with
-     * past years below it so previous allocations stay reviewable.
-     */
-    private function fiscalYears(): array
-    {
-        $current  = (int) now()->year;
-        $earliest = (int) (Budget::min('fiscal_year') ?: $current);
-        $start    = max(min($earliest, $current - 4), $current - 10);
-
-        return array_reverse(range($start, $current));
     }
 }

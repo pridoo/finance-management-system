@@ -13,7 +13,11 @@ class RoleController extends Controller
 {
     public function index()
     {
-        $roles = Role::withCount('users')->orderBy('label')->get();
+        // The administrator role is hidden from everyone but an administrator.
+        $roles = Role::withCount('users')
+            ->when(! auth()->user()->isAdmin(), fn ($q) => $q->where('key', '!=', 'admin'))
+            ->orderBy('label')
+            ->get();
 
         return view('admin.roles.index', [
             'roles'   => $roles,
@@ -115,6 +119,8 @@ class RoleController extends Controller
      */
     private function authorizeRole(Role $role): void
     {
+        abort_if(! auth()->user()->isAdmin() && $role->key === 'admin', 404);
+
         abort_unless(
             auth()->user()->canAssignRole($role->key),
             403,

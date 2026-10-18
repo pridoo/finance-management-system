@@ -12,16 +12,13 @@
             <input type="hidden" name="type" value="{{ $type }}">
         @endif
         <label for="budget-year" class="form-label mb-0! whitespace-nowrap">Fiscal Year</label>
-        {{-- A dropdown rather than a free number field: the years that can hold
-             records are a known list, and typing 2019 into a spinner only ever
-             produced an empty table. --}}
-        <select id="budget-year" name="year" onchange="this.form.submit()"
-                class="form-control w-32 py-1.5! text-lg! font-bold text-teal-800">
-            @foreach ($years as $option)
-                <option value="{{ $option }}" @selected((int) $year === $option)>{{ $option }}</option>
-            @endforeach
-        </select>
-        <noscript><button type="submit" class="btn-soft">Go</button></noscript>
+        {{-- Typed in, starting at the system's first fiscal year. Enter or
+             the button loads it; the arrows step a year at a time. --}}
+        <input type="number" id="budget-year" name="year" value="{{ $year }}"
+               min="{{ $firstYear }}" max="2099" step="1" required inputmode="numeric"
+               onchange="this.form.requestSubmit()"
+               class="form-control w-32 py-1.5! text-lg! font-bold text-teal-800 tabular-nums">
+        <button type="submit" class="btn-soft">Go</button>
     </form>
 @endsection
 
@@ -57,7 +54,7 @@
         ]
         : [
             ['label' => 'Annual Fund',          'value' => $fund ? '₱ ' . number_format($fundAmount, 2) : 'Not set', 'tone' => $fund ? 'text-gray-900' : 'text-gray-400', 'rule' => 'from-teal-500 to-teal-600'],
-            ['label' => 'Allocated to Types',   'value' => '₱ ' . number_format($yearAllocated, 2),  'tone' => 'text-gray-900',  'rule' => 'from-teal-400 to-teal-500'],
+            ['label' => 'Allocated to Fund Sources',   'value' => '₱ ' . number_format($yearAllocated, 2),  'tone' => 'text-gray-900',  'rule' => 'from-teal-400 to-teal-500'],
             ['label' => 'Total Released',       'value' => '₱ ' . number_format($yearReleased, 2),   'tone' => 'text-green-700', 'rule' => 'from-green-500 to-green-600'],
             ['label' => 'Remaining to Release', 'value' => '₱ ' . number_format($fundUnreleased, 2), 'tone' => 'text-teal-800',  'rule' => 'from-yellow-400 to-yellow-500'],
         ];
@@ -73,7 +70,7 @@
            @if($active) aria-current="page" @endif
            class="rounded-full border px-4 py-1.5 text-sm font-semibold transition
                   {{ $active ? 'border-teal-700 bg-teal-700 text-white' : 'border-[#ece7dc] bg-white text-gray-700 hover:border-teal-300 hover:bg-teal-50' }}">
-            {{ $option ?? 'All types' }}
+            {{ $option ?? 'All fund sources' }}
         </a>
     @endforeach
 </nav>
@@ -97,7 +94,7 @@
             <div>
                 <p class="text-sm font-bold text-gray-800">{{ $year }} Annual Fund</p>
                 <p class="mt-0.5 text-xs text-gray-600">
-                    Allocations per assistance type are taken out of this fund, and releases are taken out of the allocations.
+                    Each funding source is allocated out of this fund, and releases are taken out of the funding sources.
                 </p>
             </div>
             @if($isOfficer)
@@ -128,7 +125,7 @@
 
         @if(! $fund)
             <p class="mt-3 rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-900">
-                No annual fund has been set for {{ $year }}. Set it first; allocations per assistance type are then drawn from it and can no longer push the year's total past it.
+                No annual fund has been set for {{ $year }}. Set it first; funding sources are then drawn from it and can no longer push the year's total past it.
             </p>
         @elseif($fundUnreleased > 0)
             <p class="mt-3 rounded-lg {{ $yearOver ? 'bg-red-50 text-red-900' : 'bg-amber-50 text-amber-900' }} px-4 py-3 text-sm">
@@ -154,7 +151,7 @@
     $circumference = 2 * M_PI * 48;
 @endphp
 <div class="panel mb-5 p-5" data-utilization>
-    <h3 class="panel-title mb-4">Utilization</h3>
+    <h3 class="panel-title mb-4">Utilization by Funding Source</h3>
     <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
         @foreach ($type ? [$type] : $types as $cardType)
             @php
@@ -187,7 +184,7 @@
                         ₱ {{ number_format($cReleased, 2) }} of ₱ {{ number_format($cAlloc, 2) }}
                     </p>
                 @else
-                    <p class="mt-0.5 text-xs text-gray-400">No allocation for {{ $year }}</p>
+                    <p class="mt-0.5 text-xs text-gray-400">No fund source for {{ $year }}</p>
                 @endif
             </a>
         @endforeach
@@ -206,14 +203,14 @@
     {{-- Budget allocation table --}}
     <div class="panel">
         <div class="panel-head">
-            <h3 class="panel-title">Budget Allocation per Assistance Type</h3>
+            <h3 class="panel-title">Funding Sources</h3>
             <div class="flex flex-wrap items-center gap-3">
                 @if(auth()->user()->role === 'mswdo_officer')
                     <button type="button" data-budget-add class="btn-primary shrink-0 py-2.5">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
                         </svg>
-                        Add Allocation
+                        Add Fund Source
                     </button>
                 @endif
             </div>
@@ -225,7 +222,7 @@
         <table class="w-full text-sm">
             <thead class="bg-gray-50 text-xs text-gray-500 uppercase tracking-wide">
                 <tr>
-                    <th class="px-5 py-3 text-left w-[16%]">Type</th>
+                    <th class="px-5 py-3 text-left w-[16%]">Fund Source</th>
                     <th class="px-5 py-3 text-right w-[17%]">Allocated (₱)</th>
                     <th class="px-5 py-3 text-right w-[17%]">Released (₱)</th>
                     <th class="px-5 py-3 text-right w-[17%]">Balance (₱)</th>
@@ -299,7 +296,7 @@
                                     @if($budget->total_released <= 0)
                                         <form method="POST" action="{{ route('mswdo.budget.destroy', $budget) }}"
                                               data-swal-confirm="danger"
-                                              data-swal-name="the {{ $budget->assistance_type }} {{ $budget->fiscal_year }} allocation">
+                                              data-swal-name="the {{ $budget->assistance_type }} {{ $budget->fiscal_year }} fund source">
                                             @csrf
                                             @method('DELETE')
                                             <button type="submit" class="btn-soft-danger w-28 justify-center"><svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>Delete</button>
@@ -308,7 +305,7 @@
                                         {{-- Deleting would orphan the release
                                              records that reference it. --}}
                                         <span class="inline-flex w-28 justify-center items-center self-stretch rounded-lg border border-gray-100 bg-gray-50 px-3 text-sm font-medium text-gray-400"
-                                              title="This allocation has released funds and can no longer be deleted.">In use</span>
+                                              title="This funding source has released funds and can no longer be deleted.">In use</span>
                                     @endif
                                 @endif
                             </div>
@@ -323,9 +320,9 @@
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
                                           d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
                                 </svg>
-                                <p>No {{ $type ? $type . ' ' : '' }}budget allocation recorded for {{ $year }}.</p>
+                                <p>No {{ $type ? $type . ' ' : '' }}funding source recorded for {{ $year }}.</p>
                                 @if(auth()->user()->role === 'mswdo_officer')
-                                    <button type="button" data-budget-add class="btn-primary mt-1">Add the first allocation</button>
+                                    <button type="button" data-budget-add class="btn-primary mt-1">Add the first fund source</button>
                                 @endif
                             </div>
                         </td>
@@ -352,7 +349,7 @@
                     <tr>
                         <th class="px-5 py-3 text-left">Date Released</th>
                         <th class="px-5 py-3 text-left">Beneficiary</th>
-                        <th class="px-5 py-3 text-left">Type</th>
+                        <th class="px-5 py-3 text-left">Fund Source</th>
                         <th class="px-5 py-3 text-right">Amount (₱)</th>
                         <th class="px-5 py-3 text-left">Released By</th>
                     </tr>
@@ -511,19 +508,19 @@
             <p class="mb-4 rounded-lg bg-teal-50 px-4 py-3 text-sm text-teal-900">
                 This amount is <b>taken out of</b> the {{ $year }} fund.
                 <b>₱ {{ number_format($fundUnallocated, 2) }}</b> is still free to allocate.
-                If the type already has an allocation, the amount is added to it.
+                If this fund source already exists, the amount is added to it.
             </p>
         @else
             <p class="mb-4 rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-900">
-                Set the annual fund for the year first — allocations are drawn from it.
+                Set the annual fund for the year first — funding sources are drawn from it.
             </p>
         @endif
         <div class="mb-4">
             <label for="add-type" class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-600">
-                Assistance Type <span class="text-red-500">*</span>
+                Fund Source <span class="text-red-500">*</span>
             </label>
             <select id="add-type" class="swal2-input" style="margin:0;width:100%">
-                <option value="">— Select type —</option>
+                <option value="">— Select fund source —</option>
                 @foreach (['Medical','Burial','Educational','Livelihood'] as $t)
                     <option value="{{ $t }}">{{ $t }}</option>
                 @endforeach
@@ -540,11 +537,8 @@
             <label for="add-year" class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-600">
                 Fiscal Year <span class="text-red-500">*</span>
             </label>
-            <select id="add-year" class="swal2-input" style="margin:0;width:100%">
-                @foreach ($years as $option)
-                    <option value="{{ $option }}" @selected((int) $year === $option)>{{ $option }}</option>
-                @endforeach
-            </select>
+            <input id="add-year" type="number" min="{{ $firstYear }}" max="2099" step="1"
+                   value="{{ $year }}" class="swal2-input" style="margin:0;width:100%">
         </div>
     </div>
 </template>
@@ -624,11 +618,11 @@
 
         try {
             var result = await Swal.fire({
-                title: 'Add Budget Allocation',
+                title: 'Add Fund Source',
                 html: bodyFrom('tpl-budget-add'),
                 width: 560,
                 showCancelButton: true,
-                confirmButtonText: 'Save allocation',
+                confirmButtonText: 'Save fund source',
                 cancelButtonText: 'Cancel',
                 confirmButtonColor: '#15803d',
                 cancelButtonColor: '#64748b',
@@ -641,17 +635,22 @@
                     var amount = parseFloat(document.getElementById('add-amount').value);
 
                     if (!type) {
-                        Swal.showValidationMessage('Select an assistance type.');
+                        Swal.showValidationMessage('Select a fund source.');
                         return false;
                     }
                     if (isNaN(amount) || amount < 1) {
                         Swal.showValidationMessage('Enter an amount of at least ₱1.00.');
                         return false;
                     }
+                    var fiscalYear = parseInt(document.getElementById('add-year').value, 10);
+                    if (isNaN(fiscalYear) || fiscalYear < {{ $firstYear }} || fiscalYear > 2099) {
+                        Swal.showValidationMessage('Enter a fiscal year from {{ $firstYear }} onward.');
+                        return false;
+                    }
                     return {
                         assistance_type: type,
                         allocated_amount: amount,
-                        fiscal_year: document.getElementById('add-year').value,
+                        fiscal_year: fiscalYear,
                     };
                 },
             });
@@ -683,7 +682,7 @@
                 title: escapeHtml(info.year) + ' Annual Fund',
                 html:
                     '<p class="mb-3 text-left text-sm text-gray-600">The whole assistance fund for FY ' +
-                    escapeHtml(info.year) + '. Allocations per assistance type are taken out of it.</p>' +
+                    escapeHtml(info.year) + '. Funding sources are allocated out of it.</p>' +
                     (allocated > 0
                         ? '<p class="mb-3 text-left text-xs text-gray-500">Already allocated: <b>' +
                           peso(allocated.toFixed(2)) + '</b> — the fund cannot be lower than this.</p>'
@@ -793,7 +792,7 @@
 
             var body;
             if (!data.releases.length) {
-                body = '<p class="py-6 text-sm text-gray-500">No funds have been released from this allocation yet.</p>';
+                body = '<p class="py-6 text-sm text-gray-500">No funds have been released from this funding source yet.</p>';
             } else {
                 body =
                     '<div class="max-h-72 overflow-y-auto rounded-lg border border-gray-200">' +
@@ -849,14 +848,14 @@
 
         try {
             var result = await Swal.fire({
-                title: 'Edit ' + escapeHtml(info.type) + ' allocation',
+                title: 'Edit ' + escapeHtml(info.type) + ' fund source',
                 // Unlike the Add form, which tops up, this sets the figure
                 // outright. Spelling that out prevents the amount being
                 // doubled by someone expecting the other behaviour.
                 html:
-                    '<p class="mb-3 text-left text-sm text-gray-600">This <b>replaces</b> the allocation for ' +
+                    '<p class="mb-3 text-left text-sm text-gray-600">This <b>replaces</b> the amount of ' +
                     escapeHtml(info.type) + ' FY ' + escapeHtml(info.year) +
-                    '. To add funds instead, use the Add Budget Allocation form.</p>' +
+                    '. To add funds instead, use Add Fund Source.</p>' +
                     '<p class="mb-3 text-left text-xs text-gray-500">Already released: <b>' +
                     peso(released.toFixed(2)) + '</b> — the new amount cannot be lower than this.</p>' +
                     '<input id="swal-allocation" type="number" step="0.01" min="' + released +

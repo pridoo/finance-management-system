@@ -275,17 +275,16 @@ document.addEventListener('DOMContentLoaded', function () {
             added?.querySelector('input')?.focus();
         });
 
+        // The cross clears that one row's inputs only. Removing the row made
+        // the table jump, and an empty row is simply not saved anyway.
         familyRows.addEventListener('click', function (e) {
-            const remove = e.target.closest('[data-family-remove]');
-            if (!remove) return;
-            const row = remove.closest('[data-family-row]');
-            // The last row is cleared rather than removed, so there is always
-            // one to type into.
-            if (familyRows.querySelectorAll('[data-family-row]').length > 1) {
-                row.remove();
-            } else {
-                row.querySelectorAll('input, select').forEach(function (el) { el.value = ''; });
-            }
+            const clear = e.target.closest('[data-family-remove]');
+            if (!clear) return;
+            clear.closest('[data-family-row]').querySelectorAll('input, select').forEach(function (el) {
+                el.value = '';
+                el.readOnly = false;
+            });
+            updateFamilyIncome();
         });
 
         familyRows.addEventListener('change', function (e) {
@@ -299,6 +298,156 @@ document.addEventListener('DOMContentLoaded', function () {
         familyRows.addEventListener('focusout', function (e) {
             if (e.target.matches('[data-titlecase]')) e.target.value = titleCase(e.target.value.trim());
         });
+    }
+
+    /*
+     * Unemployed and Student earn nothing, so their income is set to 0 and
+     * locked — for the client and for every household member alike. The
+     * server applies the same rule, so this is only the visible half of it.
+     */
+    const noIncome = @json(\App\Models\Client::NO_INCOME_OCCUPATIONS);
+
+    function syncIncome(occupation) {
+        const scope = occupation.closest('[data-family-row]') || occupation.closest('[data-income-scope]');
+        const income = scope && scope.querySelector('[data-income], [data-referrer-income]');
+        if (!income) return;
+        const none = noIncome.includes(occupation.value);
+        if (none) income.value = '0';
+        income.readOnly = none;
+        income.classList.toggle('bg-gray-100', none);
+    }
+
+    // Client income plus every member's, shown under the family table.
+    function updateFamilyIncome() {
+        const out = document.querySelector('[data-family-total]');
+        if (!out) return;
+        let total = 0;
+        document.querySelectorAll('[data-income]').forEach(function (input) {
+            total += parseFloat(input.value) || 0;
+        });
+        out.textContent = '₱ ' + total.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+    window.updateFamilyIncome = updateFamilyIncome;
+
+    document.addEventListener('change', function (e) {
+        if (e.target.matches('[data-occupation]')) syncIncome(e.target);
+        if (e.target.matches('[data-occupation], [data-income]')) updateFamilyIncome();
+    });
+    document.addEventListener('input', function (e) {
+        if (e.target.matches('[data-income]')) updateFamilyIncome();
+    });
+    document.querySelectorAll('[data-occupation]').forEach(syncIncome);
+    updateFamilyIncome();
+
+    /*
+     * Family Head lookup. Picking an existing client links this one to their
+     * household and copies over what the household shares — address, housing
+     * and, if this table is still empty, the family composition — so a second
+     * member of the same family is not typed in from scratch.
+     */
+    const headSearch = document.querySelector('[data-head-search]');
+    if (headSearch) {
+        const headId    = document.querySelector('[data-head-id]');
+        const results   = document.querySelector('[data-head-results]');
+        const chosen    = document.querySelector('[data-head-chosen]');
+        const clearHead = document.querySelector('[data-head-clear]');
+        let timer;
+
+        function setField(name, value) {
+            const el = document.querySelector('[name="' + name + '"]');
+            if (!el || value == null || value === '') return;
+            if (el.type === 'radio') {
+                document.querySelectorAll('[name="' + name + '"]').forEach(function (r) { r.checked = r.value === value; });
+                return;
+            }
+            el.value = value;
+            el.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+
+        function pick(head) {
+            headId.value = head.id;
+            chosen.textContent = head.name + ' (ID ' + head.id + ') — ' + head.barangay;
+            chosen.parentElement.hidden = false;
+            results.hidden = true;
+            headSearch.value = '';
+
+            ['purok', 'housing_ownership', 'housing_structure', 'water_source', 'toilet', 'light', 'employment_nature']
+                .forEach(function (f) { setField(f, head[f]); });
+            setField('barangay', head.barangay);
+            const label = document.querySelector('[data-barangay-label]');
+            if (label && head.barangay) { label.textContent = head.barangay; label.classList.remove('text-gray-500'); }
+
+            // Only into an empty table: never overwrite rows already typed.
+            const rows = document.querySelectorAll('[data-family-row]');
+            const empty = Array.prototype.every.call(rows, function (r) {
+                return !r.querySelector('[name$="[name]"]').value.trim();
+            });
+            if (empty) {
+                const people = [{ name: head.name, sex: head.sex, civil_status: head.civil_status,
+                                  birth_date: head.birth_date, occupation: head.occupation,
+                                  monthly_income: head.monthly_income, educational_attainment: head.educational_attainment }]
+                    .concat(head.members);
+                people.forEach(function (p, i) {
+                    if (!rows[i]) document.querySelector('[data-family-add]').click();
+                    const row = document.querySelectorAll('[data-family-row]')[i];
+                    ['name', 'birth_date', 'age', 'sex', 'civil_status', 'relationship', 'educational_attainment', 'occupation', 'monthly_income']
+                        .forEach(function (f) {
+                            const el = row.querySelector('[name$="[' + f + ']"]');
+                            if (el && p[f] != null) el.value = p[f];
+                        });
+                    const occ = row.querySelector('[data-occupation]');
+                    if (occ) syncIncome(occ);
+                });
+            }
+            updateFamilyIncome();
+        }
+
+        headSearch.addEventListener('input', function () {
+            clearTimeout(timer);
+            const q = headSearch.value.trim();
+            if (q.length < 2) { results.hidden = true; return; }
+            timer = setTimeout(async function () {
+                try {
+                    const res = await fetch(headSearch.dataset.url + '?q=' + encodeURIComponent(q), {
+                        headers: { 'Accept': 'application/json' }, credentials: 'same-origin',
+                    });
+                    const list = await res.json();
+                    results.innerHTML = '';
+                    if (!list.length) {
+                        results.innerHTML = '<li class="px-3 py-2 text-sm text-gray-500">No client found.</li>';
+                    }
+                    list.forEach(function (head) {
+                        const li = document.createElement('li');
+                        li.className = 'cursor-pointer px-3 py-2 text-sm hover:bg-teal-50';
+                        li.textContent = '#' + head.id + ' · ' + head.name + ' — ' + head.barangay;
+                        li.addEventListener('click', function () { pick(head); });
+                        results.appendChild(li);
+                    });
+                    results.hidden = false;
+                } catch (err) {
+                    console.error('[family head] lookup failed:', err);
+                }
+            }, 250);
+        });
+
+        clearHead?.addEventListener('click', function () {
+            headId.value = '';
+            chosen.parentElement.hidden = true;
+        });
+
+        // Opened from a profile's "Add family member as client": look the
+        // head up by ID and fill the household in straight away.
+        if (headId.dataset.autofill && headId.value) {
+            fetch(headSearch.dataset.url + '?q=' + encodeURIComponent(headId.value), {
+                headers: { 'Accept': 'application/json' }, credentials: 'same-origin',
+            })
+                .then(function (res) { return res.json(); })
+                .then(function (list) {
+                    const head = list.find(function (h) { return String(h.id) === headId.value; });
+                    if (head) pick(head);
+                })
+                .catch(function (err) { console.error('[family head] autofill failed:', err); });
+        }
     }
 });
 </script>
@@ -321,14 +470,23 @@ document.addEventListener('DOMContentLoaded', function () {
         'birth_date'             => $m->birth_date?->format('Y-m-d'),
         'relationship'           => $m->relationship,
         'educational_attainment' => $m->educational_attainment,
-        'occupation_income'      => $m->occupation_income,
+        'occupation'             => $m->occupation,
+        'monthly_income'         => $m->monthly_income,
     ])->all() ?? []);
     if (count($familyRows) === 0) {
         $familyRows = array_fill(0, 3, []);
     }
 
-    $civilStatuses = ['Single', 'Married', 'Widowed', 'Separated', 'Annulled', 'Live-in'];
-    $relationships = ['Spouse', 'Son', 'Daughter', 'Father', 'Mother', 'Brother', 'Sister', 'Grandchild', 'Grandparent', 'Relative', 'Other'];
+    $civilStatuses = \App\Models\Client::CIVIL_STATUSES;
+    $headId = old('family_head_id', $client ? $client->family_head_id : request('family_head_id'));
+    // Arrived from "Add family member as client": fill the household in.
+    $autofillHead = ! $client && ! old('family_head_id') && request('family_head_id');
+    $head = $headId ? \App\Models\Client::find($headId) : null;
+
+    // A value on file that predates a dropdown's list stays selectable, so
+    // editing an old record never silently blanks it.
+    $withCurrent = fn (array $list, $current) => $current && ! in_array($current, $list, true)
+        ? array_merge($list, [$current]) : $list;
 @endphp
 
 <datalist id="dl-religion">
@@ -336,19 +494,9 @@ document.addEventListener('DOMContentLoaded', function () {
         <option value="{{ $r }}">
     @endforeach
 </datalist>
-<datalist id="dl-education">
-    @foreach (\App\Models\Client::EDUCATION_LEVELS as $e)
-        <option value="{{ $e }}">
-    @endforeach
-</datalist>
 <datalist id="dl-category">
     @foreach (\App\Models\Client::CATEGORIES as $c)
         <option value="{{ $c }}">
-    @endforeach
-</datalist>
-<datalist id="dl-relationship">
-    @foreach ($relationships as $r)
-        <option value="{{ $r }}">
     @endforeach
 </datalist>
 
@@ -368,11 +516,161 @@ document.addEventListener('DOMContentLoaded', function () {
     </div>
 </div>
 
-{{-- ===== A. Client information ===== --}}
-<h3 class="intake-heading"><span>A</span> Name of Client</h3>
+{{-- ===== Family records =====
+     For a member of a household already on file: search the Family Head by
+     name or ID and pick them. The new client is then linked to that family's
+     ledger, and the shared details are filled in from the head's record. --}}
+<div class="mb-6 rounded-xl border border-teal-200 bg-teal-50/50 p-4">
+    <label class="form-label" for="head-search">Family Head <span class="font-normal normal-case text-gray-500">(if this client belongs to a household already registered)</span></label>
+    <input type="hidden" name="family_head_id" value="{{ $headId }}" data-head-id @if ($autofillHead) data-autofill @endif>
+    <div class="relative">
+        <input type="search" id="head-search" autocomplete="off" placeholder="Search by name or client ID…"
+               data-head-search data-url="{{ route('mswdo.beneficiaries.lookup') }}"
+               class="form-control">
+        <ul data-head-results hidden
+            class="absolute z-40 mt-1 max-h-60 w-full overflow-y-auto rounded-xl border border-[#ece7dc] bg-white py-1 shadow-lg"></ul>
+    </div>
+    <p class="mt-2 flex flex-wrap items-center gap-2 text-sm text-teal-900" @if (! $head) hidden @endif>
+        Linked to the household of <b data-head-chosen>{{ $head ? $head->full_name . ' (ID ' . $head->id . ') — ' . $head->barangay : '' }}</b>
+        <button type="button" data-head-clear class="text-xs font-semibold text-red-700 underline">Remove link</button>
+    </p>
+    @error('family_head_id')<p class="form-error">{{ $message }}</p>@enderror
+</div>
 
-<div class="grid grid-cols-1 sm:grid-cols-4 gap-4">
+{{-- ===== A. Source of information / referring party =====
+     The person who brought the client in or gave the details. Left blank
+     when the client came in personally; nothing here is required.
+     Fields follow the order of the paper form. --}}
+@php
+    $ref = fn ($field) => old($field, $client?->{$field});
+    $refDob = old('referrer_date_of_birth', $client?->referrer_date_of_birth?->format('Y-m-d'));
+@endphp
+<h3 class="intake-heading"><span>A</span> Source of Information / Referring Party</h3>
+<p class="-mt-2 mb-4 text-sm text-gray-500">Leave blank if the client came in personally.</p>
 
+<div class="grid grid-cols-1 sm:grid-cols-4 gap-4" data-income-scope>
+    <div class="sm:col-span-2">
+        <label class="form-label">Name</label>
+        <input type="text" name="referrer_name" value="{{ $ref('referrer_name') }}" maxlength="150"
+               data-titlecase placeholder="First Name Middle Name Last Name"
+               class="form-control @error('referrer_name') border-red-400! @enderror">
+        @error('referrer_name')<p class="form-error">{{ $message }}</p>@enderror
+    </div>
+
+    <div>
+        <label class="form-label">Age</label>
+        <input type="text" id="referrer-age" readonly tabindex="-1"
+               value="{{ $client?->referrer_date_of_birth?->age }}"
+               class="form-control bg-gray-100 text-gray-800 cursor-default">
+    </div>
+
+    <div>
+        <label class="form-label">Civil Status</label>
+        <select name="referrer_civil_status" class="form-control">
+            <option value="">— Select —</option>
+            @foreach ($withCurrent(\App\Models\Client::CIVIL_STATUSES, $ref('referrer_civil_status')) as $s)
+                <option value="{{ $s }}" @selected($ref('referrer_civil_status') === $s)>{{ $s }}</option>
+            @endforeach
+        </select>
+    </div>
+
+    <div>
+        <label class="form-label">Sex</label>
+        <select name="referrer_sex" class="form-control">
+            <option value="">— Select —</option>
+            @foreach (['Male', 'Female'] as $s)
+                <option value="{{ $s }}" @selected($ref('referrer_sex') === $s)>{{ $s }}</option>
+            @endforeach
+        </select>
+    </div>
+
+    <div>
+        <label class="form-label">Date of Birth</label>
+        <input type="date" name="referrer_date_of_birth" value="{{ $refDob }}" max="{{ now()->format('Y-m-d') }}"
+               data-age-source="referrer-age"
+               class="form-control @error('referrer_date_of_birth') border-red-400! @enderror">
+        @error('referrer_date_of_birth')<p class="form-error">{{ $message }}</p>@enderror
+    </div>
+
+    <div>
+        <label class="form-label">Place of Birth</label>
+        <input type="text" name="referrer_birth_place" value="{{ $ref('referrer_birth_place') }}" maxlength="150" data-titlecase
+               class="form-control">
+    </div>
+
+    <div>
+        <label class="form-label">Religion</label>
+        <input type="text" name="referrer_religion" list="dl-religion" maxlength="60"
+               value="{{ $ref('referrer_religion') }}" class="form-control">
+    </div>
+
+    <div class="sm:col-span-2">
+        <label class="form-label">Educational Attainment</label>
+        <select name="referrer_educational_attainment" class="form-control">
+            <option value="">— Select —</option>
+            @foreach ($withCurrent(\App\Models\Client::EDUCATION_LEVELS, $ref('referrer_educational_attainment')) as $e)
+                <option value="{{ $e }}" @selected($ref('referrer_educational_attainment') === $e)>{{ $e }}</option>
+            @endforeach
+        </select>
+    </div>
+
+    <div class="sm:col-span-2">
+        <label class="form-label">Occupation</label>
+        <select name="referrer_occupation" data-occupation class="form-control">
+            <option value="">— Select —</option>
+            @foreach ($withCurrent(\App\Models\Client::OCCUPATIONS, $ref('referrer_occupation')) as $o)
+                <option value="{{ $o }}" @selected($ref('referrer_occupation') === $o)>{{ $o }}</option>
+            @endforeach
+        </select>
+    </div>
+
+    <div class="sm:col-span-2">
+        <label class="form-label">Present Address</label>
+        <input type="text" name="referrer_address" value="{{ $ref('referrer_address') }}" maxlength="255"
+               placeholder="e.g. Purok 2, Calao, San Agustin, Isabela" class="form-control">
+    </div>
+
+    {{-- Not data-income: the referring party is not part of the household,
+         so their income stays out of the Total Family Income. --}}
+    <div>
+        <label class="form-label">Income (₱ / month)</label>
+        <input type="number" name="referrer_income" min="0" step="0.01" placeholder="0.00" data-referrer-income
+               value="{{ $ref('referrer_income') }}" class="form-control">
+    </div>
+
+    <div>
+        <label class="form-label">CP #</label>
+        <input type="text" name="referrer_contact_number" value="{{ $ref('referrer_contact_number') }}"
+               placeholder="09XXXXXXXXX (11 digits)" maxlength="11" inputmode="numeric" data-digits-only
+               class="form-control @error('referrer_contact_number') border-red-400! @enderror">
+        @error('referrer_contact_number')<p class="form-error">{{ $message }}</p>@enderror
+    </div>
+
+    <div>
+        <label class="form-label">Relationship to Client</label>
+        <select name="referrer_relationship" class="form-control">
+            <option value="">— Select —</option>
+            @foreach ($withCurrent(array_merge(\App\Models\Client::RELATIONSHIPS, ['Barangay Official', 'Neighbor']), $ref('referrer_relationship')) as $r)
+                <option value="{{ $r }}" @selected($ref('referrer_relationship') === $r)>{{ $r }}</option>
+            @endforeach
+        </select>
+    </div>
+</div>
+
+{{-- ===== B. Client's information =====
+     Same order as the paper form. Occupation, Income and the rest share one
+     data-income-scope, so Unemployed/Student still locks the income at 0. --}}
+<h3 class="intake-heading mt-8"><span>B</span> Client's Information</h3>
+
+@php
+    $edu = old('educational_attainment', $client?->educational_attainment);
+    $occ = old('occupation', $client?->occupation);
+    $clientRel = old('client_relationship', $client?->client_relationship);
+@endphp
+
+<div class="grid grid-cols-1 sm:grid-cols-4 gap-4" data-income-scope>
+
+    {{-- Name --}}
     <div>
         <label class="form-label">Last Name <span class="text-red-500">*</span></label>
         <input type="text" name="last_name" value="{{ old('last_name', $client?->last_name) }}" required
@@ -406,32 +704,13 @@ document.addEventListener('DOMContentLoaded', function () {
         </select>
     </div>
 
-    <div>
-        <label class="form-label">Birth Date <span class="text-red-500">*</span></label>
-        <input type="date" name="date_of_birth" data-age-source="client-age"
-               value="{{ old('date_of_birth', $client?->date_of_birth?->format('Y-m-d')) }}" required
-               max="{{ now()->format('Y-m-d') }}"
-               class="form-control @error('date_of_birth') border-red-400! @enderror">
-        @error('date_of_birth')<p class="form-error">{{ $message }}</p>@enderror
-    </div>
-
-    {{-- Worked out from the birth date rather than typed, so the two can
+    {{-- Worked out from the date of birth rather than typed, so the two can
          never disagree. --}}
     <div>
         <label class="form-label">Age</label>
         <input type="text" id="client-age" readonly tabindex="-1"
                value="{{ $client?->date_of_birth?->age }}"
                class="form-control bg-gray-100 text-gray-800 cursor-default">
-    </div>
-
-    <div>
-        <label class="form-label">Sex <span class="text-red-500">*</span></label>
-        <select name="sex" required class="form-control @error('sex') border-red-400! @enderror">
-            <option value="">— Select —</option>
-            <option value="Male"   {{ old('sex', $client?->sex) == 'Male'   ? 'selected' : '' }}>Male</option>
-            <option value="Female" {{ old('sex', $client?->sex) == 'Female' ? 'selected' : '' }}>Female</option>
-        </select>
-        @error('sex')<p class="form-error">{{ $message }}</p>@enderror
     </div>
 
     <div>
@@ -446,6 +725,33 @@ document.addEventListener('DOMContentLoaded', function () {
     </div>
 
     <div>
+        <label class="form-label">Sex <span class="text-red-500">*</span></label>
+        <select name="sex" required class="form-control @error('sex') border-red-400! @enderror">
+            <option value="">— Select —</option>
+            <option value="Male"   {{ old('sex', $client?->sex) == 'Male'   ? 'selected' : '' }}>Male</option>
+            <option value="Female" {{ old('sex', $client?->sex) == 'Female' ? 'selected' : '' }}>Female</option>
+        </select>
+        @error('sex')<p class="form-error">{{ $message }}</p>@enderror
+    </div>
+
+    <div>
+        <label class="form-label">Date of Birth <span class="text-red-500">*</span></label>
+        <input type="date" name="date_of_birth" data-age-source="client-age"
+               value="{{ old('date_of_birth', $client?->date_of_birth?->format('Y-m-d')) }}" required
+               max="{{ now()->format('Y-m-d') }}"
+               class="form-control @error('date_of_birth') border-red-400! @enderror">
+        @error('date_of_birth')<p class="form-error">{{ $message }}</p>@enderror
+    </div>
+
+    <div>
+        <label class="form-label">Place of Birth</label>
+        <input type="text" name="birth_place" maxlength="150" data-titlecase
+               value="{{ old('birth_place', $client?->birth_place) }}"
+               class="form-control @error('birth_place') border-red-400! @enderror">
+        @error('birth_place')<p class="form-error">{{ $message }}</p>@enderror
+    </div>
+
+    <div>
         <label class="form-label">Religion</label>
         <input type="text" name="religion" list="dl-religion" maxlength="60"
                value="{{ old('religion', $client?->religion) }}"
@@ -453,50 +759,31 @@ document.addEventListener('DOMContentLoaded', function () {
         @error('religion')<p class="form-error">{{ $message }}</p>@enderror
     </div>
 
-    <div>
-        <label class="form-label">Birth Place</label>
-        <input type="text" name="birth_place" maxlength="150" data-titlecase
-               value="{{ old('birth_place', $client?->birth_place) }}"
-               class="form-control @error('birth_place') border-red-400! @enderror">
-        @error('birth_place')<p class="form-error">{{ $message }}</p>@enderror
-    </div>
-
     <div class="sm:col-span-2">
         <label class="form-label">Educational Attainment</label>
-        <input type="text" name="educational_attainment" list="dl-education" maxlength="80"
-               value="{{ old('educational_attainment', $client?->educational_attainment) }}"
-               class="form-control @error('educational_attainment') border-red-400! @enderror">
+        <select name="educational_attainment" class="form-control @error('educational_attainment') border-red-400! @enderror">
+            <option value="">— Select —</option>
+            @foreach ($withCurrent(\App\Models\Client::EDUCATION_LEVELS, $edu) as $e)
+                <option value="{{ $e }}" @selected($edu === $e)>{{ $e }}</option>
+            @endforeach
+        </select>
         @error('educational_attainment')<p class="form-error">{{ $message }}</p>@enderror
     </div>
 
     <div class="sm:col-span-2">
         <label class="form-label">Occupation</label>
-        <input type="text" name="occupation" maxlength="100"
-               value="{{ old('occupation', $client?->occupation) }}"
-               class="form-control @error('occupation') border-red-400! @enderror">
+        <select name="occupation" data-occupation class="form-control @error('occupation') border-red-400! @enderror">
+            <option value="">— Select —</option>
+            @foreach ($withCurrent(\App\Models\Client::OCCUPATIONS, $occ) as $o)
+                <option value="{{ $o }}" @selected($occ === $o)>{{ $o }}</option>
+            @endforeach
+        </select>
         @error('occupation')<p class="form-error">{{ $message }}</p>@enderror
     </div>
 
-    <div>
-        <label class="form-label">Income (₱ / month)</label>
-        <input type="number" name="monthly_income" min="0" step="0.01" placeholder="0.00"
-               value="{{ old('monthly_income', $client?->monthly_income) }}"
-               class="form-control @error('monthly_income') border-red-400! @enderror">
-        @error('monthly_income')<p class="form-error">{{ $message }}</p>@enderror
-    </div>
-
-    <div>
-        <label class="form-label">CP #</label>
-        <input type="text" name="contact_number" value="{{ old('contact_number', $client?->contact_number) }}"
-               placeholder="09XXXXXXXXX (11 digits)" maxlength="11" inputmode="numeric" data-digits-only
-               title="11 digits, starting with 09"
-               class="form-control @error('contact_number') border-red-400! @enderror">
-        @error('contact_number')<p class="form-error">{{ $message }}</p>@enderror
-    </div>
-
-    {{-- Address on one line, as the paper form writes it:
-         Address: Purok __, [barangay], San Agustin, Isabela   Category: __ --}}
-    <p class="form-label sm:col-span-4 mb-0! border-t border-[#f2eee5] pt-4">Address</p>
+    {{-- Present Address, as the form writes it:
+         Purok __, [barangay], San Agustin, Isabela --}}
+    <p class="form-label sm:col-span-4 mb-0! border-t border-[#f2eee5] pt-4">Present Address</p>
 
     <div>
         <label class="form-label">Purok</label>
@@ -539,13 +826,8 @@ document.addEventListener('DOMContentLoaded', function () {
                 </svg>
             </button>
 
-            {{-- position:fixed, and moved to <body> by the script.
-
-                 The surrounding .panel sets overflow:hidden to keep its rounded
-                 corners clean, which clipped this list at the card's bottom
-                 edge. A fixed layer parented to the body is outside that
-                 clipping entirely, so the full list shows and scrolls on its
-                 own however near the bottom of the card the field sits. --}}
+            {{-- position:fixed, and moved to <body> by the script, so the
+                 panel's overflow:hidden cannot clip the list. --}}
             <ul data-barangay-list role="listbox" hidden
                 class="fixed z-50 overflow-y-auto overscroll-contain rounded-xl border border-[#ece7dc] bg-white py-1 shadow-lg">
             </ul>
@@ -554,18 +836,9 @@ document.addEventListener('DOMContentLoaded', function () {
         @error('barangay')<p class="form-error">{{ $message }}</p>@enderror
     </div>
 
-    <div>
+    <div class="sm:col-span-2">
         <label class="form-label">Municipality</label>
         <p class="form-control bg-gray-100 text-gray-700">San Agustin, Isabela</p>
-    </div>
-
-    <div>
-        <label class="form-label">Category</label>
-        <input type="text" name="category" list="dl-category" maxlength="60"
-               placeholder="e.g. Senior Citizen, PWD"
-               value="{{ old('category', $client?->category) }}"
-               class="form-control @error('category') border-red-400! @enderror">
-        @error('category')<p class="form-error">{{ $message }}</p>@enderror
     </div>
 
     @if ($client && blank($client->purok) && filled($client->address))
@@ -573,24 +846,66 @@ document.addEventListener('DOMContentLoaded', function () {
             Address on file: <b class="text-gray-700">{{ $client->address }}</b>. It is kept as is until a purok is entered.
         </p>
     @endif
+
+    <div class="sm:col-span-4 h-px bg-[#f2eee5]"></div>
+
+    {{-- Unemployed and Student lock the income at 0 (see the script above). --}}
+    <div>
+        <label class="form-label">Income (₱ / month)</label>
+        <input type="number" name="monthly_income" min="0" step="0.01" placeholder="0.00" data-income
+               value="{{ old('monthly_income', $client?->monthly_income) }}"
+               class="form-control @error('monthly_income') border-red-400! @enderror">
+        @error('monthly_income')<p class="form-error">{{ $message }}</p>@enderror
+    </div>
+
+    <div>
+        <label class="form-label">CP # <span class="text-red-500">*</span></label>
+        <input type="text" name="contact_number" value="{{ old('contact_number', $client?->contact_number) }}" required
+               placeholder="09XXXXXXXXX (11 digits)" maxlength="11" minlength="11" inputmode="numeric" data-digits-only
+               title="11 digits, starting with 09"
+               class="form-control @error('contact_number') border-red-400! @enderror">
+        @error('contact_number')<p class="form-error">{{ $message }}</p>@enderror
+    </div>
+
+    <div>
+        <label class="form-label">Relationship to Client</label>
+        <select name="client_relationship" class="form-control @error('client_relationship') border-red-400! @enderror">
+            <option value="">— Select —</option>
+            @foreach ($withCurrent(array_merge(['Self'], \App\Models\Client::RELATIONSHIPS), $clientRel) as $r)
+                <option value="{{ $r }}" @selected($clientRel === $r)>{{ $r }}</option>
+            @endforeach
+        </select>
+        @error('client_relationship')<p class="form-error">{{ $message }}</p>@enderror
+    </div>
+
+    {{-- Not on the paper form, but kept for FHONA / YNSP and the rest. --}}
+    <div>
+        <label class="form-label">Category</label>
+        <input type="text" name="category" list="dl-category" maxlength="60"
+               placeholder="e.g. FHONA, YNSP"
+               value="{{ old('category', $client?->category) }}"
+               class="form-control @error('category') border-red-400! @enderror">
+        @error('category')<p class="form-error">{{ $message }}</p>@enderror
+    </div>
 </div>
 
 {{-- ===== B. Family composition ===== --}}
-<h3 class="intake-heading mt-8"><span>B</span> Family Composition</h3>
+<h3 class="intake-heading mt-8"><span>C</span> Family Composition</h3>
 
 <div class="overflow-x-auto rounded-xl border border-[#ece7dc]">
-    <table class="w-full min-w-[960px] text-sm" data-family-table>
+    <table class="w-full min-w-[1200px] text-sm" data-family-table>
         <thead class="bg-gray-50 text-[11px] font-bold uppercase tracking-wide text-gray-600">
             <tr>
-                <th class="px-2 py-2.5 text-left">Name</th>
+                <th class="px-2 py-2.5 text-left min-w-52">Name <span class="block font-medium normal-case tracking-normal text-gray-500">First Name, Middle Name, Last Name</span></th>
                 <th class="px-2 py-2.5 text-left w-36">Birth-date</th>
                 <th class="px-2 py-2.5 text-left w-16">Age</th>
-                <th class="px-2 py-2.5 text-left w-28">Gender</th>
+                <th class="px-2 py-2.5 text-left w-28">Sex</th>
                 <th class="px-2 py-2.5 text-left w-32">Civil Status</th>
-                <th class="px-2 py-2.5 text-left w-32">Relationship to Client</th>
-                <th class="px-2 py-2.5 text-left w-40">Educational Attainment</th>
-                <th class="px-2 py-2.5 text-left w-36">Occupation / Income</th>
-                <th class="w-10"><span class="sr-only">Remove</span></th>
+                <th class="px-2 py-2.5 text-left w-36">Relationship to Client</th>
+                <th class="px-2 py-2.5 text-left w-44">Educational Attainment</th>
+                <th class="px-2 py-2.5 text-left w-40">Occupation</th>
+                <th class="px-2 py-2.5 text-left w-32">Monthly Income (₱)</th>
+                <th class="w-10"><span class="sr-only">Clear row</span></th>
             </tr>
         </thead>
         <tbody data-family-rows class="divide-y divide-gray-100">
@@ -603,8 +918,16 @@ document.addEventListener('DOMContentLoaded', function () {
 <template data-family-template>
     @include('mswdo.beneficiaries._family-row', ['i' => '__INDEX__', 'row' => []])
 </template>
-<div class="mt-3 flex flex-wrap items-center justify-between gap-2">
-    <p class="text-xs text-gray-500">Rows left without a name are not saved.</p>
+<div class="mt-3 flex flex-wrap items-center justify-between gap-3">
+    <p class="text-xs text-gray-500">
+        Write names as <b>First Name, Middle Name, Last Name</b> (e.g. Juan Santos Dela Cruz).
+        Rows left without a name are not saved; ✕ clears a row.
+    </p>
+    {{-- Client's income plus every household member's, kept up to date as
+         the table is filled in. --}}
+    <p class="rounded-xl bg-teal-50 px-4 py-2 text-sm font-semibold text-teal-900">
+        Total Family Income: <span data-family-total class="tabular-nums">₱ 0.00</span> / month
+    </p>
     <button type="button" data-family-add class="btn-soft">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
@@ -620,7 +943,7 @@ document.addEventListener('DOMContentLoaded', function () {
 @endforeach
 
 {{-- ===== C. Additional income ===== --}}
-<h3 class="intake-heading mt-8"><span>C</span> Additional Income</h3>
+<h3 class="intake-heading mt-8"><span>D</span> Additional Income</h3>
 
 <p class="form-label">1. Nature of Employment</p>
 <div class="mb-5 flex flex-wrap gap-x-6 gap-y-2">
@@ -635,33 +958,35 @@ document.addEventListener('DOMContentLoaded', function () {
 </div>
 
 <p class="form-label">2. Describing Housing &amp; Other Condition</p>
+{{-- Dropdowns, so households can be compared and counted. A value typed in
+     before the dropdowns existed stays selectable on edit. --}}
+@php
+    $selects = [
+        ['housing_ownership', 'A. Housing — Ownership',             \App\Models\Client::HOUSING_OWNERSHIP],
+        ['housing_structure', 'A. Housing — Structure',             \App\Models\Client::HOUSING_STRUCTURES],
+        ['water_source',      'B. Use and Source of Potable Water', \App\Models\Client::WATER_SOURCES],
+        ['toilet',            'C. Toilet Facilities',               \App\Models\Client::TOILET_FACILITIES],
+    ];
+@endphp
 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+    @foreach ($selects as [$field, $label, $options])
+        @php $current = old($field, $client?->{$field}); @endphp
+        <div>
+            <label class="form-label font-medium!">{{ $label }}</label>
+            <select name="{{ $field }}" class="form-control @error($field) border-red-400! @enderror">
+                <option value="">— Select —</option>
+                @foreach ($withCurrent($options, $current) as $option)
+                    <option value="{{ $option }}" @selected($current === $option)>{{ $option }}</option>
+                @endforeach
+            </select>
+            @error($field)<p class="form-error">{{ $message }}</p>@enderror
+        </div>
+    @endforeach
+    @if ($client?->housing)
+        <p class="sm:col-span-2 -mt-2 text-sm text-gray-500">Housing notes on file: <b class="text-gray-700">{{ $client->housing }}</b></p>
+    @endif
     <div class="sm:col-span-2">
-        <label class="form-label font-medium!">A. Housing (structure, materials, space)</label>
-        <input type="text" name="housing" maxlength="255"
-               placeholder="e.g. Semi-concrete, two rooms, owned"
-               value="{{ old('housing', $client?->housing) }}"
-               class="form-control @error('housing') border-red-400! @enderror">
-        @error('housing')<p class="form-error">{{ $message }}</p>@enderror
-    </div>
-    <div class="sm:col-span-2">
-        <label class="form-label font-medium!">B. Use and Source of Potable Water</label>
-        <input type="text" name="water_source" maxlength="150"
-               placeholder="e.g. Deep well, water district"
-               value="{{ old('water_source', $client?->water_source) }}"
-               class="form-control @error('water_source') border-red-400! @enderror">
-        @error('water_source')<p class="form-error">{{ $message }}</p>@enderror
-    </div>
-    <div>
-        <label class="form-label font-medium!">C. Toilet</label>
-        <input type="text" name="toilet" maxlength="150"
-               placeholder="e.g. Water-sealed, shared"
-               value="{{ old('toilet', $client?->toilet) }}"
-               class="form-control @error('toilet') border-red-400! @enderror">
-        @error('toilet')<p class="form-error">{{ $message }}</p>@enderror
-    </div>
-    <div>
-        <label class="form-label font-medium!">D. Light</label>
+        <label class="form-label font-medium!">D. Household Light</label>
         <input type="text" name="light" maxlength="150"
                placeholder="e.g. Electricity, kerosene"
                value="{{ old('light', $client?->light) }}"
@@ -672,10 +997,10 @@ document.addEventListener('DOMContentLoaded', function () {
 
 {{-- ===== D–G. Case notes ===== --}}
 @foreach ([
-    ['D', 'problem_presented',  'Problem Presented'],
-    ['E', 'initial_assessment', 'Initial Assessment'],
-    ['F', 'recommendation',     'Recommendation'],
-    ['G', 'plan_of_action',     'Plan of Action / Taken'],
+    ['E', 'problem_presented',  'Problem Presented'],
+    ['F', 'initial_assessment', 'Initial Assessment'],
+    ['G', 'recommendation',     'Recommendation'],
+    ['H', 'plan_of_action',     'Plan of Action / Taken'],
 ] as [$letter, $field, $label])
     <h3 class="intake-heading mt-8"><span>{{ $letter }}</span> {{ $label }}</h3>
     <textarea name="{{ $field }}" rows="3" maxlength="5000" autocapitalize="sentences"

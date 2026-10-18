@@ -16,6 +16,10 @@ class UserController extends Controller
     public function index(Request $request)
     {
         $users = User::query()
+            // Administrator accounts are hidden from everyone but an
+            // administrator. They still exist and can still sign in; an
+            // officer simply never sees or manages them.
+            ->when(! auth()->user()->isAdmin(), fn ($query) => $query->where('role', '!=', 'admin'))
             ->when($request->search, fn ($query, $search) => $query->where(fn ($q) =>
                 $q->where('name', 'like', "%{$search}%")
                   ->orWhere('first_name', 'like', "%{$search}%")
@@ -29,7 +33,9 @@ class UserController extends Controller
                 $query->where('is_active', $request->string('status')->toString() === 'active')
             )
             // Built-ins first in rank order, then any custom role alphabetically.
-            ->orderByRaw("FIELD(role, 'admin', 'mswdo_officer', 'mswdo_staff') DESC")
+            // Same order as MySQL's FIELD(...) DESC, written as CASE so it also
+            // runs on SQLite (the test database).
+            ->orderByRaw("CASE role WHEN 'admin' THEN 1 WHEN 'mswdo_officer' THEN 2 WHEN 'mswdo_staff' THEN 3 ELSE 0 END DESC")
             ->orderBy('role')
             ->orderBy('last_name')
             ->orderBy('first_name')
@@ -38,7 +44,9 @@ class UserController extends Controller
 
         return view('admin.users.index', [
             'users' => $users,
-            'roles' => Role::orderBy('label')->get(),
+            'roles' => Role::query()
+                ->when(! auth()->user()->isAdmin(), fn ($q) => $q->where('key', '!=', 'admin'))
+                ->orderBy('label')->get(),
         ]);
     }
 
@@ -197,6 +205,10 @@ class UserController extends Controller
      */
     private function authorizeTarget(User $user): void
     {
+        // 404 rather than 403 for a hidden administrator account, so a guessed
+        // URL does not even confirm the account exists.
+        abort_if(! auth()->user()->isAdmin() && $user->isAdmin(), 404);
+
         abort_unless(
             auth()->user()->canManage($user),
             403,

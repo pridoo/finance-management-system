@@ -10,7 +10,7 @@
         <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
         </svg>
-        Add Beneficiary
+        Add Client
     </a>
 @endsection
 
@@ -44,7 +44,7 @@
                     <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
                 </svg>
                 <input type="text" name="search" value="{{ request('search') }}"
-                       placeholder="Search by beneficiary name..."
+                       placeholder="Search by beneficiary or family member name..."
                        class="form-control w-full pl-10 py-2.5">
             </div>
             <select name="barangay" class="form-control w-full sm:w-44 shrink-0 py-2.5" aria-label="Filter by barangay">
@@ -93,7 +93,19 @@
                                  out than a wall of same-weight text. --}}
                             <div class="flex items-center gap-3">
                                 <span class="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-teal-100 text-xs font-extrabold text-teal-800" aria-hidden="true">{{ $initials }}</span>
-                                <span class="font-semibold text-gray-900">{{ $client->full_name }}</span>
+                                <span class="min-w-0">
+                                    <span class="block font-semibold text-gray-900">{{ $client->full_name }}</span>
+                                    {{-- Matched through the household rather than
+                                         the client's own name: say who matched, so
+                                         the clerk sees this is the Family Head of
+                                         the person searched for. --}}
+                                    @if ($client->relationLoaded('familyMembers') && $client->familyMembers->isNotEmpty())
+                                        <span class="mt-0.5 block text-xs font-medium text-amber-800">
+                                            Family Head of
+                                            {{ $client->familyMembers->map(fn ($m) => $m->name . ($m->relationship ? ' (' . $m->relationship . ')' : ''))->join(', ') }}
+                                        </span>
+                                    @endif
+                                </span>
                             </div>
                         </td>
                         <td class="px-5 py-4 text-gray-700">{{ $client->barangay }}</td>

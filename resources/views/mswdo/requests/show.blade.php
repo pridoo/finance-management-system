@@ -25,6 +25,8 @@
     };
     $canEdit    = in_array($req->status, ['Pending', 'Under Review'], true);
     $isOfficer  = auth()->user()->role === 'mswdo_officer';
+    // Staff can release an approved request but cannot approve or reject one.
+    $canRelease = in_array(auth()->user()->role, ['mswdo_officer', 'mswdo_staff'], true);
 @endphp
 
 {{-- The actions sit beside the page title, where the eye lands first.
@@ -54,7 +56,8 @@
             </button>
         @endif
 
-        @if($isOfficer && $req->status !== 'Released' && $req->status !== 'Rejected')
+        @if(($isOfficer && $req->status !== 'Released' && $req->status !== 'Rejected')
+            || ($canRelease && in_array($req->status, ['Approved', 'For Release'], true)))
             <button type="button" data-approval-update class="btn-primary">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
@@ -93,7 +96,7 @@
                 <dd class="mt-1 text-base text-gray-800">{{ $req->client->barangay }}</dd>
             </div>
             <div>
-                <dt class="text-xs font-semibold uppercase tracking-wide text-gray-500">Assistance Type</dt>
+                <dt class="text-xs font-semibold uppercase tracking-wide text-gray-500">Source of Fund</dt>
                 <dd class="mt-1">
                     <span class="inline-flex items-center rounded-full border border-teal-200 bg-teal-50 px-3 py-1 text-sm font-semibold text-teal-800">
                         {{ $req->assistance_type }}
@@ -175,8 +178,15 @@
                 <dd class="mt-1 text-base text-gray-800">{{ $req->approval->decided_at?->format('M d, Y') ?? '—' }}</dd>
             </div>
             <div class="sm:col-span-2">
-                <dt class="text-xs font-semibold uppercase tracking-wide text-gray-500">Remarks</dt>
-                <dd class="mt-1 text-base text-gray-800">{{ $req->approval->remarks ?? '—' }}</dd>
+                @if ($req->approval->decision === 'Approved')
+                    <dt class="text-xs font-semibold uppercase tracking-wide text-gray-500">Funding Source</dt>
+                    <dd class="mt-1 text-base text-gray-800">
+                        {{ $req->approval->budget ? $req->approval->budget->assistance_type . ' FY ' . $req->approval->budget->fiscal_year : '—' }}
+                    </dd>
+                @else
+                    <dt class="text-xs font-semibold uppercase tracking-wide text-gray-500">Reason for Rejection</dt>
+                    <dd class="mt-1 text-base text-gray-800">{{ $req->approval->remarks ?? '—' }}</dd>
+                @endif
             </div>
         </dl>
     </div>
@@ -215,7 +225,7 @@
     <div class="text-left">
         <div class="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
-                <label for="edit-type" class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-600">Type of Assistance</label>
+                <label for="edit-type" class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-600">Source of Fund</label>
                 <select id="edit-type" class="swal2-input" style="margin:0;width:100%">
                     @foreach (['Medical','Burial','Educational','Livelihood'] as $type)
                         <option value="{{ $type }}" @selected($req->assistance_type === $type)>{{ $type }}</option>
@@ -237,7 +247,7 @@
 </template>
 @endif
 
-@if($isOfficer)
+@if($canRelease)
 <template id="tpl-approval-decision">
     <div class="text-left">
         <p class="mb-4 text-sm text-gray-600">
@@ -251,8 +261,24 @@
                 <option value="Rejected">Rejected</option>
             </select>
         </div>
-        <div>
-            <label for="ap-remarks" class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-600">Remarks</label>
+        {{-- Approving names the funding source; rejecting gives the reason.
+             The script shows whichever applies to the chosen decision. --}}
+        <div data-ap-fund style="display:none">
+            <label for="ap-fund" class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-600">Funding Source <span class="text-red-500">*</span></label>
+            <select id="ap-fund" class="swal2-input" style="margin:0;width:100%">
+                <option value="">— Select funding source —</option>
+                @foreach ($budgets as $b)
+                    <option value="{{ $b->id }}" @selected($req->approval?->budget_id === $b->id)>{{ $b->assistance_type }} {{ $b->fiscal_year }} — ₱ {{ number_format($b->remaining_balance, 2) }} remaining</option>
+                @endforeach
+            </select>
+            @if($budgets->isEmpty())
+                <p class="mt-2 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">
+                    No current {{ strtolower($req->assistance_type) }} funding source. Add one in Budget Tracking first.
+                </p>
+            @endif
+        </div>
+        <div data-ap-reason style="display:none">
+            <label for="ap-remarks" class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-600">Reason for Rejection</label>
             <textarea id="ap-remarks" rows="3" class="swal2-textarea" style="margin:0;width:100%"></textarea>
         </div>
     </div>
@@ -264,14 +290,14 @@
              so the warning is stated before the fields, not after. --}}
         <p class="mb-4 rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-800">
             Funds will be recorded as released to <b>{{ $req->client->full_name }}</b> and deducted
-            from the selected budget. This cannot be undone.
+            from the selected funding source. This cannot be undone.
         </p>
         <div class="mb-4">
-            <label for="rl-budget" class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-600">Budget Source <span class="text-red-500">*</span></label>
+            <label for="rl-budget" class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-600">Funding Source <span class="text-red-500">*</span></label>
             <select id="rl-budget" class="swal2-input" style="margin:0;width:100%">
-                <option value="">— Select budget —</option>
+                <option value="">— Select funding source —</option>
                 @foreach ($budgets as $b)
-                    <option value="{{ $b->id }}">{{ $b->assistance_type }} {{ $b->fiscal_year }} — ₱ {{ number_format($b->remaining_balance, 2) }} remaining</option>
+                    <option value="{{ $b->id }}" @selected($req->approval?->budget_id === $b->id)>{{ $b->assistance_type }} {{ $b->fiscal_year }} — ₱ {{ number_format($b->remaining_balance, 2) }} remaining</option>
                 @endforeach
             </select>
             @if($budgets->isEmpty())
@@ -443,13 +469,29 @@
                     allowOutsideClick: false,
                     focusConfirm: false,
                     customClass: modalClasses,
+                    didOpen: function () {
+                        var select = document.getElementById('ap-decision');
+                        select.addEventListener('change', function () {
+                            document.querySelector('.swal2-container [data-ap-fund]').style.display = select.value === 'Approved' ? '' : 'none';
+                            document.querySelector('.swal2-container [data-ap-reason]').style.display = select.value === 'Rejected' ? '' : 'none';
+                        });
+                    },
                     preConfirm: function () {
                         var value = document.getElementById('ap-decision').value;
                         if (!value) {
                             Swal.showValidationMessage('Select Approved or Rejected.');
                             return false;
                         }
-                        return { decision: value, remarks: document.getElementById('ap-remarks').value.trim() };
+                        var fund = document.getElementById('ap-fund').value;
+                        if (value === 'Approved' && !fund) {
+                            Swal.showValidationMessage('Select the funding source before approving.');
+                            return false;
+                        }
+                        return {
+                            decision: value,
+                            budget_id: value === 'Approved' ? fund : '',
+                            remarks: value === 'Rejected' ? document.getElementById('ap-remarks').value.trim() : '',
+                        };
                     },
                 });
 
@@ -458,6 +500,7 @@
                 post('{{ route('mswdo.approvals.store') }}', {
                     request_id: '{{ $req->id }}',
                     decision: decision.value.decision,
+                    budget_id: decision.value.budget_id,
                     remarks: decision.value.remarks,
                 });
                 return;
@@ -506,14 +549,14 @@
                     customClass: modalClasses,
                     preConfirm: function () {
                         if (!hasBudget) {
-                            Swal.showValidationMessage('No budget is available for this assistance type.');
+                            Swal.showValidationMessage('No funding source is available for this assistance.');
                             return false;
                         }
                         var budgetId = document.getElementById('rl-budget').value;
                         var amount   = parseFloat(document.getElementById('rl-amount').value);
 
                         if (!budgetId) {
-                            Swal.showValidationMessage('Select the budget the funds come from.');
+                            Swal.showValidationMessage('Select the funding source the funds come from.');
                             return false;
                         }
                         if (isNaN(amount) || amount <= 0) {

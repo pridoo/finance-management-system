@@ -43,7 +43,7 @@ class User extends Authenticatable
      */
     public const ROLE_DEFAULTS = [
         'mswdo_officer' => ['dashboard', 'beneficiaries', 'requests', 'approvals', 'budget', 'reports'],
-        'mswdo_staff'   => ['dashboard', 'beneficiaries', 'requests', 'reports'],
+        'mswdo_staff'   => ['dashboard', 'beneficiaries', 'requests', 'approvals', 'reports'],
         'admin'         => [],
     ];
 

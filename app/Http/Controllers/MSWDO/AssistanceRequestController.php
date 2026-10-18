@@ -56,16 +56,25 @@ class AssistanceRequestController extends Controller
             // Only documents on the chosen type's checklist, so a Burial
             // request cannot be stored as having an enrollment form.
             'submitted_docs.*' => ['string', Rule::in(Requirements::labels((string) $request->input('assistance_type')))],
+            'is_referred'      => 'nullable|boolean',
+            'is_scholar'       => 'nullable|boolean',
         ]);
         $data['submitted_docs'] = array_values(array_unique($data['submitted_docs'] ?? []));
+        $data['is_referred'] = $request->boolean('is_referred');
+        // Scholar status only means something for educational assistance.
+        $data['is_scholar'] = $data['assistance_type'] === 'Educational' && $request->boolean('is_scholar');
 
-        // Every document on the checklist has to be in hand before a request
-        // is filed. The form keeps Submit disabled until they are all ticked;
-        // this is the same rule for a request that skipped the form.
-        $missing = array_diff(Requirements::labels($data['assistance_type']), $data['submitted_docs']);
+        // Every mandatory document has to be in hand before a request is
+        // filed; optional ones ("if applicable") never block it. The form
+        // keeps Submit disabled until they are ticked; this is the same rule
+        // for a request that skipped the form.
+        $missing = array_diff(
+            Requirements::mandatory($data['assistance_type'], $data['is_referred'], $data['is_scholar']),
+            $data['submitted_docs']
+        );
         if ($missing) {
             throw ValidationException::withMessages([
-                'submitted_docs' => 'All requirements must be submitted first. Still missing: '
+                'submitted_docs' => 'All required documents must be submitted first. Still missing: '
                     . implode(', ', $missing) . '.',
             ]);
         }
@@ -82,6 +91,25 @@ class AssistanceRequestController extends Controller
                 'amount' => number_format((float) $open->amount_requested, 2),
                 'filed'  => $open->created_at?->format('M d, Y'),
                 'url'    => route('mswdo.requests.show', $open),
+            ]);
+        }
+
+        // One assistance of a kind per household every three months. The
+        // household is the client plus everyone linked to the same Family
+        // Head, so a spouse or child cannot file for the same need a week
+        // later. Members only typed into the Family Composition are matched by
+        // name, which is not reliable enough to block on — the form warns
+        // about those instead.
+        if ($recent = $this->findRecentInHousehold($data)) {
+            $who = (int) $recent->client_id === (int) $data['client_id']
+                ? 'This client'
+                : ($recent->client?->full_name ?? 'A member of this household');
+
+            throw ValidationException::withMessages([
+                'assistance_type' => "{$who} already received {$recent->assistance_type} assistance on "
+                    . $recent->created_at->format('M d, Y') . " (request #{$recent->id}). "
+                    . 'The same assistance can be given to a household only once every 3 months — next eligible on '
+                    . $recent->created_at->copy()->addMonths(3)->format('M d, Y') . '.',
             ]);
         }
 
@@ -104,7 +132,7 @@ class AssistanceRequestController extends Controller
 
     public function show(AssistanceRequest $assistanceRequest)
     {
-        $assistanceRequest->load(['client', 'encoder', 'approval.recorder', 'disbursement.releasedBy']);
+        $assistanceRequest->load(['client', 'encoder', 'approval.recorder', 'approval.budget', 'disbursement.releasedBy']);
 
         // The approval step now happens in a modal on this page rather than on
         // a separate screen, so the budget options it needs have to be here.
@@ -172,6 +200,26 @@ class AssistanceRequestController extends Controller
      * much a reason to stop and look before filing another. Rejected and
      * Released are settled, so they do not warn.
      */
+    /**
+     * A non-rejected request of the same type, filed in the last 3 months by
+     * anyone in this client's household.
+     */
+    private function findRecentInHousehold(array $data): ?AssistanceRequest
+    {
+        $client = Client::find($data['client_id']);
+        if (! $client) {
+            return null;
+        }
+
+        return AssistanceRequest::with('client')
+            ->whereIn('client_id', $client->householdIds())
+            ->where('assistance_type', $data['assistance_type'])
+            ->where('status', '!=', 'Rejected')
+            ->where('created_at', '>=', now()->subMonths(3))
+            ->latest()
+            ->first();
+    }
+
     private function findOpenRequest(array $data): ?AssistanceRequest
     {
         return AssistanceRequest::with('client')

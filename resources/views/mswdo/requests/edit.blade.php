@@ -30,7 +30,7 @@
 
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                    <label class="form-label">Type of Assistance</label>
+                    <label class="form-label">Source of Fund</label>
                     <select name="assistance_type" required class="form-control">
                         @foreach (['Medical','Burial','Educational','Livelihood'] as $type)
                             <option value="{{ $type }}" @selected(old('assistance_type', $req->assistance_type) === $type)>{{ $type }}</option>
