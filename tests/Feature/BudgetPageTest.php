@@ -118,8 +118,10 @@ class BudgetPageTest extends TestCase
             ->get(route('mswdo.budget.index', ['year' => 2026, 'type' => 'Medical']))
             ->assertOk()
             ->assertSee('Medical releases')
-            ->assertSee('data-budget-split="' . Budget::where('assistance_type', 'Medical')->value('id') . '"', false)
-            ->assertDontSee('data-budget-split="' . Budget::where('assistance_type', 'Burial')->value('id') . '"', false);
+            ->assertSee('data-budget-view="' . route('mswdo.budget.show', Budget::where('assistance_type', 'Medical')->value('id')) . '"', false)
+            ->assertDontSee('data-budget-view="' . route('mswdo.budget.show', Budget::where('assistance_type', 'Burial')->value('id')) . '"', false)
+            // Split / sub-allocations are switched off for now.
+            ->assertDontSee('data-budget-split="', false);
     }
 
     public function test_fiscal_year_is_typed_and_starts_at_2026(): void

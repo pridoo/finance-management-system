@@ -25,6 +25,11 @@
 @section('content')
 
 @php
+    // SPLIT / SUB-ALLOCATIONS — hidden for now. Set to true to bring back the
+    // Split button, the "N parts" line under each fund source, and the Split
+    // dialog. The data, routes and controller methods are untouched.
+    $splitEnabled = false;
+
     $isOfficer = auth()->user()->role === 'mswdo_officer';
 
     // Figures for whatever the page is narrowed to (one type, or all).
@@ -241,7 +246,7 @@
                                  Split dialog: five budgets each with their own
                                  expanded panel buried the table this page is
                                  actually for. --}}
-                            @if ($budget->subAllocations->isNotEmpty())
+                            @if ($splitEnabled && $budget->subAllocations->isNotEmpty())
                                 <p class="mt-0.5 truncate text-xs text-gray-500" title="{{ $budget->subAllocations->pluck('label')->join(', ') }}">
                                     {{ $budget->subAllocations->count() }}
                                     {{ Str::plural('part', $budget->subAllocations->count()) }}:
@@ -267,7 +272,9 @@
                                 </button>
 
                                 {{-- Reading the split is not officer-only, same
-                                     reasoning as Releases above. --}}
+                                     reasoning as Releases above. Hidden while
+                                     $splitEnabled is false. --}}
+                                @if ($splitEnabled)
                                 <button type="button"
                                         data-budget-split="{{ $budget->id }}"
                                         class="btn-soft-plain">
@@ -279,6 +286,7 @@
                                         </span>
                                     @endif
                                 </button>
+                                @endif
 
                                 @if(auth()->user()->role === 'mswdo_officer')
                                     <button type="button"
@@ -391,8 +399,9 @@
 
 {{-- One split panel per budget, kept out of the table and opened on demand.
      Rendered as templates rather than fetched, since the data is already on
-     the page and a split is read far more often than it is edited. --}}
-@foreach ($budgets as $budget)
+     the page and a split is read far more often than it is edited.
+     Not rendered while $splitEnabled is false. --}}
+@foreach ($splitEnabled ? $budgets : [] as $budget)
     <template id="tpl-budget-split-{{ $budget->id }}">
         <div class="text-left">
             @php
