@@ -189,6 +189,15 @@ class FamilyIntakeFormTest extends TestCase
         $this->assertEquals(7500, $client->family_income);
     }
 
+    public function test_nature_of_employment_accepts_not_applicable(): void
+    {
+        $this->actingAs($this->officer())
+            ->post(route('mswdo.beneficiaries.store'), $this->payload(['employment_nature' => 'Not Applicable']))
+            ->assertSessionHasNoErrors();
+
+        $this->assertSame('Not Applicable', Client::firstOrFail()->employment_nature);
+    }
+
     public function test_cp_number_is_required(): void
     {
         $this->actingAs($this->officer())

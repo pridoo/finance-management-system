@@ -85,7 +85,7 @@ class Client extends Model
         'Vocational', 'College Level', 'College Graduate', 'Post Graduate',
     ];
 
-    public const EMPLOYMENT_NATURES = ['Casual', 'Permanent', 'Temporary', 'Unemployed'];
+    public const EMPLOYMENT_NATURES = ['Casual', 'Permanent', 'Temporary', 'Unemployed', 'Not Applicable'];
 
     /**
      * Normalise names on the way in, not just on the way out.
