@@ -82,6 +82,9 @@ class ClientController extends Controller
             'monthly_income'         => 'nullable|numeric|min:0|max:9999999999',
             'purok'                  => 'nullable|string|max:30',
             'barangay'               => 'required|string|max:100',
+            // Typed in full by the short Add Client form; the intake form
+            // builds it from purok and barangay instead.
+            'address'                => 'nullable|string|max:255',
             // Exactly 11 digits starting 09. The model's mutator has already
             // rewritten +63/63 prefixes into this shape before storage.
             'contact_number'         => ['required', 'digits:11', 'regex:/^09\d{9}$/'],
@@ -226,7 +229,9 @@ class ClientController extends Controller
         $data = $this->zeroIncomeIfNone($request->validate($this->rules()));
         $family = $data['family'] ?? [];
         unset($data['family']);
-        $data['address'] = Client::composeAddress($data['purok'] ?? null, $data['barangay']);
+        if (blank($data['address'] ?? null)) {
+            $data['address'] = Client::composeAddress($data['purok'] ?? null, $data['barangay']);
+        }
 
         // The warning is advisory: the clerk confirms once and the same submit
         // goes through. Blocking outright would strand genuine namesakes, which

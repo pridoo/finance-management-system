@@ -111,10 +111,36 @@ class FamilyIntakeFormTest extends TestCase
         $this->assertSame('Aglipayan', $client->fresh()->religion);
     }
 
-    public function test_the_form_shows_every_section(): void
+    public function test_add_client_uses_the_short_first_draft_form(): void
     {
         $this->actingAs($this->officer())
             ->get(route('mswdo.beneficiaries.create'))
+            ->assertOk()
+            ->assertSee('Add Client Profile')
+            ->assertSee('name="address"', false)
+            ->assertDontSee('data-family-template', false);
+    }
+
+    public function test_a_typed_full_address_is_kept(): void
+    {
+        $this->actingAs($this->officer())
+            ->post(route('mswdo.beneficiaries.store'), [
+                'first_name' => 'Rosa', 'last_name' => 'Reyes', 'date_of_birth' => '1970-01-01',
+                'sex' => 'Female', 'civil_status' => 'Widowed', 'barangay' => 'Calao',
+                'contact_number' => '09171112222', 'address' => '12 Rizal St., Calao',
+            ])
+            ->assertSessionHasNoErrors();
+
+        $this->assertSame('12 Rizal St., Calao', Client::firstOrFail()->address);
+    }
+
+    public function test_the_edit_form_shows_every_section(): void
+    {
+        $officer = $this->officer();
+        $this->actingAs($officer)->post(route('mswdo.beneficiaries.store'), $this->payload());
+
+        $this->actingAs($officer)
+            ->get(route('mswdo.beneficiaries.edit', Client::firstOrFail()))
             ->assertOk()
             ->assertSee('Family Intake Data Form')
             ->assertSeeInOrder(['Source of Information / Referring Party', "Client's Information",
