@@ -9,7 +9,7 @@
 </head>
 <body class="auth-page">
     <main class="auth-shell">
-        <section class="auth-visual" style="background-image: url('{{ asset('images/mswdo-login-hero.png') }}')">
+        <section class="auth-visual" style="background-image: url('{{ asset('images/dswd-relief-hero.webp') }}')">
             <div class="auth-visual__shade"></div>
 
             <div class="auth-brand">
@@ -17,6 +17,7 @@
                      this as a government system, and it is where the green and
                      yellow of the whole portal comes from. --}}
                 <img src="{{ asset('images/sanagustinlogo.png') }}" alt="" class="auth-seal" aria-hidden="true">
+                <img src="{{ asset('images/dswd-seal.png') }}" alt="DSWD" class="auth-seal">
                 <div>
                     <p class="auth-kicker">Municipality of San Agustin</p>
                     <h1>San Agustin-MSWDO</h1>
@@ -58,6 +59,7 @@
                      the page would otherwise carry no identity at all. --}}
                 <div class="auth-mobile-brand">
                     <img src="{{ asset('images/sanagustinlogo.png') }}" alt="" class="auth-seal" aria-hidden="true">
+                    <img src="{{ asset('images/dswd-seal.png') }}" alt="DSWD" class="auth-seal">
                     <div>
                         <p>Municipality of San Agustin</p>
                         <strong>San Agustin-MSWDO</strong>
