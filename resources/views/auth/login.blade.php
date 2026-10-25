@@ -69,7 +69,7 @@
                 <div class="auth-copy">
                     <p class="auth-eyebrow">Welcome back</p>
                     <h2>Sign in</h2>
-                    <p>Enter the email and password given to you by the MSWDO administrator.</p>
+                    <p>Enter the email and password given to you by the MSWDO Officer.</p>
                 </div>
 
                 <form method="POST" action="{{ route('login') }}" class="auth-form">
@@ -153,7 +153,7 @@
                 </form>
 
                 {{-- Someone who cannot get in has no other route from here.
-                     Naming the administrator is the whole of the help this
+                     Naming the MSWDO Officer is the whole of the help this
                      page can honestly offer. --}}
                 <p class="auth-help">
                     <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -162,7 +162,7 @@
                     </svg>
                     <span>
                         Forgotten your password, or account disabled? Contact the
-                        <strong>MSWDO administrator</strong> — accounts are created and reset from the office.
+                        <strong>MSWDO Officer</strong> — accounts are created and reset from the office.
                     </span>
                 </p>
             </div>
