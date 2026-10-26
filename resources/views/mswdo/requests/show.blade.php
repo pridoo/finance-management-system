@@ -96,7 +96,7 @@
                 <dd class="mt-1 text-base text-gray-800">{{ $req->client->barangay }}</dd>
             </div>
             <div>
-                <dt class="text-xs font-semibold uppercase tracking-wide text-gray-500">Source of Fund</dt>
+                <dt class="text-xs font-semibold uppercase tracking-wide text-gray-500">Type of Assistance</dt>
                 <dd class="mt-1">
                     <span class="inline-flex items-center rounded-full border border-teal-200 bg-teal-50 px-3 py-1 text-sm font-semibold text-teal-800">
                         {{ $req->assistance_type }}
@@ -225,7 +225,7 @@
     <div class="text-left">
         <div class="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
-                <label for="edit-type" class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-600">Source of Fund</label>
+                <label for="edit-type" class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-600">Type of Assistance</label>
                 <select id="edit-type" class="swal2-input" style="margin:0;width:100%">
                     @foreach (['Medical','Burial','Educational','Livelihood'] as $type)
                         <option value="{{ $type }}" @selected($req->assistance_type === $type)>{{ $type }}</option>

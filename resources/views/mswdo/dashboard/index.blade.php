@@ -119,7 +119,7 @@
                 <thead class="bg-gray-50 text-xs text-gray-500 uppercase tracking-wide">
                     <tr>
                         <th class="px-5 py-3 text-left">Beneficiary</th>
-                        <th class="px-5 py-3 text-left">Source of Fund</th>
+                        <th class="px-5 py-3 text-left">Type of Assistance</th>
                         <th class="px-5 py-3 text-left">Amount</th>
                         <th class="px-5 py-3 text-left">Status</th>
                     </tr>

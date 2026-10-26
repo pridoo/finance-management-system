@@ -133,7 +133,7 @@
 
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
                         <div>
-                            <label class="form-label">Source of Fund <span class="text-red-500">*</span></label>
+                            <label class="form-label">Type of Assistance <span class="text-red-500">*</span></label>
                             <select name="assistance_type" id="type-select" required class="form-control @error('assistance_type') border-red-400! @enderror">
                                 <option value="">— Select type —</option>
                                 @foreach (['Medical','Burial','Educational','Livelihood'] as $t)

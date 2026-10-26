@@ -33,7 +33,7 @@
         </div>
         <dl class="grid grid-cols-2 gap-2 text-sm">
             <div><dt class="text-xs text-gray-400">Beneficiary</dt><dd class="font-medium text-gray-800">{{ $req->client->full_name }}</dd></div>
-            <div><dt class="text-xs text-gray-400">Source of Fund</dt><dd class="text-gray-700">{{ $req->assistance_type }}</dd></div>
+            <div><dt class="text-xs text-gray-400">Type of Assistance</dt><dd class="text-gray-700">{{ $req->assistance_type }}</dd></div>
             <div><dt class="text-xs text-gray-400">Amount Req.</dt><dd class="font-semibold text-gray-800">₱ {{ number_format($req->amount_requested, 2) }}</dd></div>
             <div><dt class="text-xs text-gray-400">Date Filed</dt><dd class="text-gray-600">{{ $req->created_at->format('M d, Y') }}</dd></div>
         </dl>

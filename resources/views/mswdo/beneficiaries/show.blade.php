@@ -156,7 +156,7 @@
                  this says what the household has drawn and for what, which is
                  the question asked when a new request comes in. --}}
             <div class="border-b border-gray-100 bg-[#fbf9f4] px-6 py-4">
-                <p class="mb-3 text-xs font-bold uppercase tracking-wide text-gray-500">By Source of Fund</p>
+                <p class="mb-3 text-xs font-bold uppercase tracking-wide text-gray-500">By Type of Assistance</p>
                 <div class="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3">
                     @foreach ($byCategory as $type => $totals)
                         <div class="rounded-xl border border-[#ece7dc] bg-white px-3.5 py-3">
@@ -212,7 +212,7 @@
                 <thead class="bg-gray-50 text-xs font-semibold uppercase tracking-wide text-gray-600">
                     <tr>
                         <th class="px-5 py-3.5 text-left">Date</th>
-                        <th class="px-5 py-3.5 text-left">Source of Fund</th>
+                        <th class="px-5 py-3.5 text-left">Type of Assistance</th>
                         <th class="px-5 py-3.5 text-right">Requested</th>
                         <th class="px-5 py-3.5 text-right">Released</th>
                         <th class="px-5 py-3.5 text-left">Status</th>
@@ -335,7 +335,7 @@
                     <th class="px-5 py-3 text-left">Request #</th>
                     <th class="px-5 py-3 text-left">Date Filed</th>
                     <th class="px-5 py-3 text-left">Family Member</th>
-                    <th class="px-5 py-3 text-left">Source of Fund</th>
+                    <th class="px-5 py-3 text-left">Type of Assistance</th>
                     <th class="px-5 py-3 text-right">Amount (₱)</th>
                     <th class="px-5 py-3 text-left">Status</th>
                 </tr>

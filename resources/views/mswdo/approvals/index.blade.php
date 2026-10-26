@@ -56,7 +56,7 @@
                 <tr>
                     <th class="px-5 py-3 text-left">#</th>
                     <th class="px-5 py-3 text-left">Beneficiary</th>
-                    <th class="px-5 py-3 text-left">Source of Fund</th>
+                    <th class="px-5 py-3 text-left">Type of Assistance</th>
                     <th class="px-5 py-3 text-left">Amount Req.</th>
                     <th class="px-5 py-3 text-left">Current Status</th>
                     <th class="px-5 py-3 text-left">Date Filed</th>
