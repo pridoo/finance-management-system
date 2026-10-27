@@ -12,10 +12,38 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
+/**
+ * Approvals module: deciding on assistance requests and releasing the funds.
+ *
+ * A request moves through these statuses:
+ *   Pending / Under Review -> Approved or Rejected      (store(), Officer only)
+ *   Approved -> For Release -> Released                  (update(), Officer or Staff)
+ * Releasing creates a Disbursement record, which deducts the money from the
+ * chosen budget (fund source).
+ *
+ * Pages: resources/views/mswdo/approvals/index.blade.php (the list, with the
+ * decide / release modals) and resources/views/mswdo/approvals/show.blade.php.
+ *
+ * Routes (resource 'approvals', under /mswdo, need the 'approvals' module permission):
+ *  GET  /mswdo/approvals              index()   mswdo.approvals.index
+ *  GET  /mswdo/approvals/{approval}   show()    mswdo.approvals.show   (page or JSON)
+ *  POST /mswdo/approvals              store()   mswdo.approvals.store  (approve / reject)
+ *  PUT  /mswdo/approvals/{approval}   update()  mswdo.approvals.update (for release / released)
+ *
+ * Note: the {approval} route parameter is an AssistanceRequest, not an Approval row.
+ */
 class ApprovalController extends Controller
 {
+    /**
+     * Shows the Approvals list: every assistance request, newest first.
+     *
+     * Called when the user opens Approvals from the sidebar, or filters by
+     * status (?status=Pending). Returns: the view mswdo.approvals.index.
+     */
     public function index(Request $request)
     {
+        // The requests in the table (25 per page) with their client and
+        // approval record. Filtered by status only when ?status= is given.
         $requests = AssistanceRequest::with(['client', 'approval'])
             ->when($request->status, fn ($q) => $q->where('status', $request->status))
             ->latest()->paginate(25)->withQueryString();
@@ -23,6 +51,8 @@ class ApprovalController extends Controller
         // The release step is now a modal on this page, so each row needs the
         // budgets it could draw from. Fetched once and grouped by type rather
         // than queried per row, which would be a query per request on the page.
+        // Result: ['Medical' => [budgets...], 'Burial' => [...], ...] for this year,
+        // each budget with its total released so the remaining balance can be shown.
         $budgetsByType = Budget::withSum('disbursements', 'amount_released')
             ->where('fiscal_year', now()->year)
             ->get()
@@ -31,8 +61,20 @@ class ApprovalController extends Controller
         return view('mswdo.approvals.index', compact('requests', 'budgetsByType'));
     }
 
+    /**
+     * Shows one assistance request with its decision and release details.
+     *
+     * Called by the "View" button. When opened by JavaScript (the details
+     * modal) it returns JSON; when opened as a normal page it returns the
+     * view mswdo.approvals.show.
+     *
+     * $approval here is the AssistanceRequest (named after the route parameter).
+     */
     public function show(Request $request, AssistanceRequest $approval)
     {
+        // Load everything the details need in one go: the client, who encoded
+        // the request, the decision (and who recorded it / which budget), and
+        // the release (and who released it).
         $approval->load(['client', 'encoder', 'approval.recorder', 'approval.budget', 'disbursement.releasedBy']);
 
         // The index pages open the full picture in a modal rather than
@@ -41,6 +83,7 @@ class ApprovalController extends Controller
             return response()->json($this->detailPayload($approval));
         }
 
+        // This year's budgets for the same assistance type, for the funding source choice on the page.
         $budgets = Budget::where('assistance_type', $approval->assistance_type)
             ->where('fiscal_year', now()->year)->get();
 
@@ -50,6 +93,9 @@ class ApprovalController extends Controller
     /**
      * Everything the details modal shows: the request itself, the approval
      * decision and its reason, and the release record when there is one.
+     *
+     * Helper for show(). Returns: a plain array that becomes the JSON response.
+     * 'approval' and 'release' are null when that step has not happened yet.
      */
     private function detailPayload(AssistanceRequest $req): array
     {
@@ -95,9 +141,14 @@ class ApprovalController extends Controller
      * always reflects the current state of the case and carries the remarks
      * attached to each step. A rejected request ends at its decision — there
      * is no release to show — and that absence is the point.
+     *
+     * Helper for detailPayload(). Returns: a list of events, each with a label,
+     * date, time, who did it, a note, and a 'tone' (neutral / good / bad /
+     * pending) that the modal uses to colour the step.
      */
     private function timelineFor(AssistanceRequest $req): array
     {
+        // Step 1 always exists: the request was filed.
         $events = [[
             'label'  => 'Request filed',
             'at'     => $req->created_at?->format('M d, Y'),
@@ -107,6 +158,7 @@ class ApprovalController extends Controller
             'tone'   => 'neutral',
         ]];
 
+        // Step 2: the Officer's decision, if one has been made.
         if ($req->approval) {
             $approved = $req->approval->decision === 'Approved';
             $events[] = [
@@ -119,6 +171,7 @@ class ApprovalController extends Controller
             ];
         }
 
+        // Step 3: the release of funds, if it has happened.
         if ($req->disbursement) {
             $events[] = [
                 'label' => 'Funds released — ₱' . number_format((float) $req->disbursement->amount_released, 2),
@@ -146,10 +199,20 @@ class ApprovalController extends Controller
         return $events;
     }
 
+    /**
+     * Records the Officer's decision (Approved or Rejected) on a request.
+     *
+     * Called by the Approve / Reject modal on the Approvals list
+     * (POST /mswdo/approvals). Officer only.
+     * Returns: redirect back to the list with a success message.
+     */
     public function store(Request $request)
     {
         $this->ensureOfficer();
 
+        // request_id: must be an existing assistance request.
+        // decision: only "Approved" or "Rejected".
+        // remarks: the reason, used when rejecting.
         $data = $request->validate([
             'request_id' => 'required|exists:assistance_requests,id',
             'decision'   => 'required|in:Approved,Rejected',
@@ -161,17 +224,21 @@ class ApprovalController extends Controller
             'budget_id.required_if' => 'Select the funding source before approving.',
         ]);
 
+        // Done in a database transaction: either every change below is saved, or none is.
         $assistanceRequest = DB::transaction(function () use ($data) {
+            // lockForUpdate() locks the row so two users cannot decide on the same request at once.
             $assistanceRequest = AssistanceRequest::lockForUpdate()->findOrFail($data['request_id']);
 
+            // Only requests still waiting for a decision can be decided.
             if (! in_array($assistanceRequest->status, ['Pending', 'Under Review'], true)) {
                 throw ValidationException::withMessages([
                     'decision' => 'A final decision has already been recorded for this request.',
                 ]);
             }
 
-            $approved = $data['decision'] === 'Approved';
+            $approved = $data['decision'] === 'Approved'; // true = approving, false = rejecting
             if ($approved) {
+                // The chosen funding source must match the request's assistance type and be this year's.
                 $budget = Budget::findOrFail($data['budget_id']);
                 if ($budget->assistance_type !== $assistanceRequest->assistance_type || $budget->fiscal_year !== now()->year) {
                     throw ValidationException::withMessages([
@@ -180,6 +247,8 @@ class ApprovalController extends Controller
                 }
             }
 
+            // One Approval row per request: create it, or overwrite it if it exists.
+            // Approved keeps the budget and no remarks; Rejected keeps the remarks and no budget.
             Approval::updateOrCreate(
                 ['request_id' => $data['request_id']],
                 [
@@ -191,6 +260,7 @@ class ApprovalController extends Controller
                 ]
             );
 
+            // Move the request itself to its new status.
             $assistanceRequest->update([
                 'status' => $data['decision'] === 'Approved' ? 'Approved' : 'Rejected',
             ]);
@@ -201,6 +271,7 @@ class ApprovalController extends Controller
         });
 
         $assistanceRequest->loadMissing('client');
+        // The beneficiary's name for the success message (falls back to the request number).
         $name = $assistanceRequest->client?->full_name ?? "request #{$assistanceRequest->id}";
 
         // Back to the listing the decision was made from, now that the modal
@@ -210,10 +281,23 @@ class ApprovalController extends Controller
             : "Request #{$assistanceRequest->id} for {$name} has been <b>rejected</b>.");
     }
 
+    /**
+     * Moves an approved request through the release steps:
+     *  - status "For Release": queues an Approved request for payout;
+     *  - status "Released": records the payout (creates a Disbursement) and
+     *    deducts it from the chosen budget.
+     *
+     * Called by the release modal on the Approvals list (PUT /mswdo/approvals/{approval}).
+     * Officer or Staff. $approval is the AssistanceRequest.
+     * Returns: redirect back to the list with a success message.
+     */
     public function update(Request $request, AssistanceRequest $approval)
     {
         $this->ensureCanRelease();
 
+        // status: the step being done ("For Release" or "Released").
+        // amount_released: required only when releasing; cannot be negative.
+        // remarks: optional note saved with the release.
         $data = $request->validate([
             'status'        => 'required|in:For Release,Released',
             'amount_released'=> 'required_if:status,Released|nullable|numeric|min:0',
@@ -222,7 +306,9 @@ class ApprovalController extends Controller
             'remarks'       => 'nullable|string',
         ]);
 
+        // All-or-nothing: the disbursement and status change are saved together.
         DB::transaction(function () use ($approval, $data) {
+            // Re-read the request with a row lock so two users cannot release it twice.
             $approval = AssistanceRequest::lockForUpdate()->findOrFail($approval->id);
 
             if ($data['status'] === 'For Release') {
@@ -232,17 +318,20 @@ class ApprovalController extends Controller
 
                 $approval->update(['status' => 'For Release']);
             } else {
+                // Releasing: the request must be "For Release" and not already paid.
                 if ($approval->status !== 'For Release' || $approval->disbursement()->exists()) {
                     throw ValidationException::withMessages(['status' => 'This request is not eligible for release.']);
                 }
 
+                // The budget to pay from: the one picked now, otherwise the one picked at approval.
                 $budgetId = $data['budget_id'] ?? $approval->approval?->budget_id;
                 if (! $budgetId) {
                     throw ValidationException::withMessages(['budget_id' => 'Select the funding source the funds come from.']);
                 }
 
+                // Lock the budget too, so two releases cannot overspend it at the same time.
                 $budget = Budget::lockForUpdate()->findOrFail($budgetId);
-                $amount = (float) $data['amount_released'];
+                $amount = (float) $data['amount_released']; // the amount being paid out
 
                 if ($budget->assistance_type !== $approval->assistance_type || $budget->fiscal_year !== now()->year) {
                     throw ValidationException::withMessages(['budget_id' => 'Select a current funding source for the same assistance.']);
@@ -252,10 +341,13 @@ class ApprovalController extends Controller
                     throw ValidationException::withMessages(['amount_released' => 'Released amount cannot exceed the requested amount.']);
                 }
 
+                // remaining_balance = budget's allocated amount minus everything already released from it.
                 if ($amount > $budget->remaining_balance) {
                     throw ValidationException::withMessages(['amount_released' => 'The selected budget has insufficient balance.']);
                 }
 
+                // The release record. Budget balances are computed from these
+                // rows, so creating it is what deducts the money from the budget.
                 Disbursement::create([
                     'request_id' => $approval->id,
                     'budget_id' => $budget->id,
@@ -271,6 +363,7 @@ class ApprovalController extends Controller
         });
 
         $approval->loadMissing(['client', 'disbursement']);
+        // The beneficiary's name for the success message.
         $name = $approval->client?->full_name ?? "request #{$approval->id}";
 
         return back()->with('success', $data['status'] === 'Released'
