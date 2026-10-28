@@ -50,7 +50,7 @@
 
         <section class="auth-panel" aria-label="Login form">
             <div class="auth-panel__header">
-                <p>Management v2.0</p>
+                <p></p>
                 <span>Authorized Access</span>
             </div>
 

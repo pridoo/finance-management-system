@@ -126,6 +126,24 @@ class User extends Authenticatable
         'view_only'         => 'boolean',
     ];
 
+    /**
+     * Profile picture placed by hand in public/images/avatars, named after the
+     * part of the email before the @ (mswdo@sanagustin.gov.ph -> mswdo.jpg).
+     * Null when there is no such file, so the layout falls back to initials.
+     */
+    public function getAvatarUrlAttribute(): ?string
+    {
+        $name = strtolower(strstr($this->email, '@', true) ?: $this->email);
+
+        foreach (['jpg', 'jpeg', 'png', 'webp'] as $ext) {
+            if (is_file(public_path("images/avatars/{$name}.{$ext}"))) {
+                return asset("images/avatars/{$name}.{$ext}");
+            }
+        }
+
+        return null;
+    }
+
     public function isAdmin(): bool
     {
         return $this->role === 'admin';

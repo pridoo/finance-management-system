@@ -17,7 +17,7 @@
         <img src="{{ asset('images/sanagustinlogo.png') }}" alt="" class="rail-seal" aria-hidden="true">
         <div class="min-w-0 flex-1">
             <h1 class="truncate text-sm font-extrabold leading-tight text-gray-900">San Agustin-MSWDO</h1>
-            <p class="mt-0.5 text-[11px] font-semibold text-teal-700">v2.0</p>
+            <p class="mt-0.5 text-[11px] font-semibold text-teal-700"></p>
         </div>
         <button type="button" data-sidebar-close
                 class="lg:hidden shrink-0 rounded-lg p-1.5 text-gray-500 hover:bg-gray-100 hover:text-gray-900"
@@ -115,7 +115,13 @@
             ->implode('') ?: mb_strtoupper(mb_substr($me->name, 0, 1));
     @endphp
     <div class="rail-user">
-        <span class="rail-avatar" aria-hidden="true">{{ $initials }}</span>
+        <span class="rail-avatar" style="overflow:hidden" aria-hidden="true">
+            @if($me->avatar_url)
+                <img src="{{ $me->avatar_url }}" alt="" style="width:100%;height:100%;object-fit:cover">
+            @else
+                {{ $initials }}
+            @endif
+        </span>
         <div class="min-w-0 flex-1">
             <p class="truncate text-sm font-bold text-gray-900">{{ $me->name }}</p>
             <p class="truncate text-[11px] font-medium capitalize text-gray-500">
