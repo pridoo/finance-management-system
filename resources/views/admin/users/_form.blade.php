@@ -18,6 +18,38 @@
         <h3 class="font-semibold text-gray-900 mb-4">Account details</h3>
 
         <div class="space-y-4">
+            {{-- Profile picture. Saved as public/images/avatars/{email name}.{ext};
+                 without one, the user's initials are shown instead. --}}
+            <div>
+                <label class="form-label">
+                    Profile picture <span class="font-normal text-gray-500">— optional</span>
+                </label>
+                <div class="flex items-center gap-4">
+                    <span class="grid h-16 w-16 shrink-0 place-items-center rounded-full bg-teal-100 text-lg font-extrabold text-teal-800"
+                          style="overflow:hidden" data-avatar-preview>
+                        @if($user->exists && $user->avatar_url)
+                            <img src="{{ $user->avatar_url }}" alt="" style="width:100%;height:100%;object-fit:cover">
+                        @else
+                            <svg class="h-7 w-7" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24" aria-hidden="true">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
+                            </svg>
+                        @endif
+                    </span>
+                    <div class="min-w-0 flex-1">
+                        <input type="file" name="avatar" accept="image/jpeg,image/png,image/webp"
+                               class="form-control" data-avatar-input>
+                        <p class="mt-1 text-xs text-gray-500">JPG, PNG or WEBP, up to 2 MB. A square picture looks best.</p>
+                        @if($user->exists && $user->avatar_url)
+                            <label class="mt-1.5 inline-flex items-center gap-2 text-xs text-gray-700 cursor-pointer">
+                                <input type="checkbox" name="remove_avatar" value="1" class="h-4 w-4 rounded border-gray-300 text-red-600">
+                                Remove current picture
+                            </label>
+                        @endif
+                    </div>
+                </div>
+                @error('avatar') <p class="mt-1 text-xs text-red-600">{{ $message }}</p> @enderror
+            </div>
+
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                     <label class="form-label">First name <span class="text-red-500">*</span></label>
@@ -170,6 +202,24 @@
 </div>
 
 <script>
+    // Show the chosen picture in the circle right away, before saving.
+    (function () {
+        var input = document.querySelector('[data-avatar-input]');
+        var preview = document.querySelector('[data-avatar-preview]');
+        if (!input || !preview) return;
+
+        input.addEventListener('change', function () {
+            var file = input.files && input.files[0];
+            if (!file) return;
+
+            var img = document.createElement('img');
+            img.src = URL.createObjectURL(file);   // temporary local link to the chosen file
+            img.alt = '';
+            img.style.cssText = 'width:100%;height:100%;object-fit:cover';
+            preview.replaceChildren(img);
+        });
+    })();
+
     (function () {
         var select = document.querySelector('[data-role-select]');
         var modules = document.querySelector('[data-modules]');
