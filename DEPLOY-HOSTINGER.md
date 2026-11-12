@@ -4,6 +4,40 @@ Gabay ito para mailagay ang San Agustin MSWDO portal (Laravel 10) sa Hostinger s
 
 ---
 
+## 0. Ang aktwal na server natin (mabilisang update)
+
+| | |
+|---|---|
+| **Domain** | https://sanagustin-gov.com |
+| **SSH** | `ssh -p 65002 u933700278@37.44.245.70` (password: nasa hPanel → Websites → Dashboard → Advanced → SSH Access) |
+| **Folder ng app** | `~/domains/sanagustin-gov.com/laravel` |
+| **`public_html`** | symlink papunta sa `laravel/public` |
+
+Sa mga halimbawa sa ibaba, `u123456789` = `u933700278` at `yourdomain.com` = `sanagustin-gov.com`.
+
+**Tuwing may bagong code:** i-`git push` muna sa computer mo, tapos:
+
+```bash
+ssh -p 65002 u933700278@37.44.245.70
+cd ~/domains/sanagustin-gov.com/laravel
+php artisan down --secret="silip-lang-ako"
+git pull
+composer install --no-dev --optimize-autoloader   # kung may binago sa composer.json
+php artisan migrate --force                       # kung may bagong migration
+php artisan config:cache && php artisan route:cache && php artisan view:cache
+php artisan up
+```
+
+**Profile pictures:** naka-save ang mga upload sa `laravel/public/images/avatars`. Kailangang writable ito (isang beses lang):
+
+```bash
+mkdir -p public/images/avatars && chmod 775 public/images/avatars
+```
+
+Kapag ayaw mag-`git pull` dahil sa "local changes" sa `public/images/avatars`, i-run muna ang `git checkout -- public/images/avatars`, tapos `git pull` ulit, at i-upload ulit ang napalitang picture.
+
+---
+
 ## 1. Paano gumagana ang Hostinger
 
 | Bagay | Ibig sabihin |

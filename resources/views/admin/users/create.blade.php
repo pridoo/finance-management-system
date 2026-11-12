@@ -12,7 +12,7 @@
 
 {{-- Back lives in the breadcrumb above the title now. --}}
 <div class="max-w-5xl">
-    <form method="POST" action="{{ route('admin.users.store') }}">
+    <form method="POST" action="{{ route('admin.users.store') }}" enctype="multipart/form-data">
         @csrf
         @include('admin.users._form')
     </form>

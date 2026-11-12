@@ -128,7 +128,14 @@
                                      status column at the far right. --}}
                                 <span class="grid h-9 w-9 shrink-0 place-items-center rounded-full text-xs font-extrabold
                                              {{ $user->is_active ? 'bg-teal-100 text-teal-800' : 'bg-gray-200 text-gray-500' }}"
-                                      aria-hidden="true">{{ $initials }}</span>
+                                      style="overflow:hidden" aria-hidden="true">
+                                    @if($user->avatar_url)
+                                        <img src="{{ $user->avatar_url }}" alt=""
+                                             style="width:100%;height:100%;object-fit:cover;{{ $user->is_active ? '' : 'filter:grayscale(1);opacity:.6' }}">
+                                    @else
+                                        {{ $initials }}
+                                    @endif
+                                </span>
                                 <span class="font-semibold text-gray-900">
                                     {{ $user->name }}
                                     @if($isSelf)
