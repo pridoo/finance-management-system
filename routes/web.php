@@ -5,6 +5,7 @@ use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\MSWDO\ApprovalController;
 use App\Http\Controllers\MSWDO\AssistanceRequestController;
+use App\Http\Controllers\MSWDO\BackupController;
 use App\Http\Controllers\MSWDO\BudgetController;
 use App\Http\Controllers\MSWDO\ClientController;
 use App\Http\Controllers\MSWDO\DashboardController;
@@ -41,7 +42,7 @@ Route::middleware(['auth', 'active', 'admin', 'notviewonly'])->prefix('admin')->
 // MSWDO protected routes. 'active' ends the session of an account disabled
 // mid-session; 'notviewonly' blocks writes for read-only accounts; and each
 // group carries the module permission the admin assigns per user.
-Route::middleware(['auth', 'active', 'notviewonly'])->prefix('mswdo')->name('mswdo.')->group(function () {
+Route::middleware(['auth', 'active', 'notviewonly', 'dailybackup'])->prefix('mswdo')->name('mswdo.')->group(function () {
 
     // Dashboard
     Route::get('/dashboard', [DashboardController::class, 'index'])
@@ -97,5 +98,13 @@ Route::middleware(['auth', 'active', 'notviewonly'])->prefix('mswdo')->name('msw
         Route::get('/reports', [ReportController::class, 'index'])->name('reports.index');
         Route::get('/reports/export', [ReportController::class, 'export'])->name('reports.export');
         Route::get('/reports/export-pdf', [ReportController::class, 'exportPdf'])->name('reports.export-pdf');
+    });
+
+    // Database backup
+    Route::middleware('module:backup')->group(function () {
+        Route::get('/backup', [BackupController::class, 'index'])->name('backup.index');
+        Route::post('/backup', [BackupController::class, 'store'])->name('backup.store');
+        Route::get('/backup/{file}', [BackupController::class, 'download'])->name('backup.download');
+        Route::delete('/backup/{file}', [BackupController::class, 'destroy'])->name('backup.destroy');
     });
 });

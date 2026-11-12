@@ -34,6 +34,7 @@ class User extends Authenticatable
         'approvals'     => 'Approvals',
         'budget'        => 'Budget Tracking',
         'reports'       => 'Reports',
+        'backup'        => 'Backup',
     ];
 
     /**
@@ -42,7 +43,7 @@ class User extends Authenticatable
      * anything created before the roles table existed.
      */
     public const ROLE_DEFAULTS = [
-        'mswdo_officer' => ['dashboard', 'beneficiaries', 'requests', 'approvals', 'budget', 'reports'],
+        'mswdo_officer' => ['dashboard', 'beneficiaries', 'requests', 'approvals', 'budget', 'reports', 'backup'],
         'mswdo_staff'   => ['dashboard', 'beneficiaries', 'requests', 'approvals', 'reports'],
         'admin'         => [],
     ];
@@ -125,6 +126,55 @@ class User extends Authenticatable
         'is_active'         => 'boolean',
         'view_only'         => 'boolean',
     ];
+
+    /** Folder (inside public/) that holds the profile pictures. */
+    public const AVATAR_DIR = 'images/avatars';
+
+    /** Picture types that are accepted and looked for. */
+    public const AVATAR_EXTENSIONS = ['jpg', 'jpeg', 'png', 'webp'];
+
+    /**
+     * The picture's file name without the extension: the part of the email
+     * before the @ (mswdo@sanagustin.gov.ph -> mswdo).
+     */
+    public function avatarName(?string $email = null): string
+    {
+        $email ??= $this->email;
+
+        return strtolower(strstr($email, '@', true) ?: $email);
+    }
+
+    /**
+     * Full path on disk of this user's picture, or null when there is none.
+     * The picture is either uploaded from User Management or placed by hand.
+     */
+    public function avatarFile(?string $email = null): ?string
+    {
+        $name = $this->avatarName($email);
+
+        foreach (self::AVATAR_EXTENSIONS as $ext) {
+            $path = public_path(self::AVATAR_DIR."/{$name}.{$ext}");
+            if (is_file($path)) {
+                return $path;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Browser URL of this user's picture. Null when there is no such file,
+     * so the layout falls back to initials. The ?v= part changes whenever the
+     * file changes, so the browser shows a new picture instead of a cached one.
+     */
+    public function getAvatarUrlAttribute(): ?string
+    {
+        $path = $this->avatarFile();
+
+        return $path
+            ? asset(self::AVATAR_DIR.'/'.basename($path)).'?v='.filemtime($path)
+            : null;
+    }
 
     public function isAdmin(): bool
     {
@@ -267,6 +317,7 @@ class User extends Authenticatable
             'approvals'     => 'mswdo.approvals.index',
             'budget'        => 'mswdo.budget.index',
             'reports'       => 'mswdo.reports.index',
+            'backup'        => 'mswdo.backup.index',
         ];
 
         foreach ($this->allowedModules() as $module) {

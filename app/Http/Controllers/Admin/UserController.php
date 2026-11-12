@@ -7,6 +7,7 @@ use App\Models\AuditLog;
 use App\Models\Role;
 use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Password;
@@ -129,6 +130,11 @@ class UserController extends Controller
             'permissions' => $this->permissionsFor($request, $data['role']), // which modules this user may open
         ]);
 
+        // Profile picture is optional; save it only if one was chosen.
+        if ($request->hasFile('avatar')) {
+            $this->saveAvatar($user, $request->file('avatar'));
+        }
+
         // Keep a record of who did this in the audit log.
         AuditLog::record("Created user: {$user->name} ({$user->email})", 'Users', $user->id);
 
@@ -197,6 +203,10 @@ class UserController extends Controller
             $request->merge(['is_active' => true, 'view_only' => false]);
         }
 
+        // The picture is named after the email, so remember the old email in
+        // case it changes below.
+        $oldEmail = $user->email;
+
         // fill() sets the new values on the model; they are saved by save() below.
         $user->fill([
             'first_name'  => $data['first_name'],
@@ -216,6 +226,20 @@ class UserController extends Controller
         }
 
         $user->save();
+
+        // Profile picture: remove it, replace it, or (if the email changed)
+        // rename the existing file so it still matches the new email.
+        if ($request->boolean('remove_avatar')) {
+            $this->deleteAvatar($user, $oldEmail);
+        } elseif ($request->hasFile('avatar')) {
+            $this->deleteAvatar($user, $oldEmail);
+            $this->saveAvatar($user, $request->file('avatar'));
+        } elseif ($user->avatarName($oldEmail) !== $user->avatarName()) {
+            $old = $user->avatarFile($oldEmail);
+            if ($old && ! $user->avatarFile()) {
+                rename($old, public_path(User::AVATAR_DIR.'/'.$user->avatarName().'.'.pathinfo($old, PATHINFO_EXTENSION)));
+            }
+        }
 
         AuditLog::record("Updated user: {$user->name} ({$user->email})", 'Users', $user->id);
 
@@ -270,6 +294,7 @@ class UserController extends Controller
         // Save the name and email first, because after delete() we still need
         // them for the audit log and the success message.
         $label = "{$user->name} ({$user->email})";
+        $this->deleteAvatar($user);   // the picture goes with the account
         $user->delete();
 
         AuditLog::record("Deleted user: {$label}", 'Users');
@@ -342,10 +367,50 @@ class UserController extends Controller
             // Ticked modules: a list where each item must be a key of User::MODULES.
             'permissions'   => 'array',
             'permissions.*' => ['string', Rule::in(array_keys(User::MODULES))],
+            // Optional profile picture: must really be an image, of an
+            // accepted type, and at most 2 MB (2048 KB).
+            'avatar'        => ['nullable', 'image', 'mimes:'.implode(',', User::AVATAR_EXTENSIONS), 'max:2048'],
         ], [
             // Custom error message for an invalid module.
             'permissions.*.in' => 'One of the selected modules is not valid.',
+            'avatar.max'       => 'The profile picture must not be larger than 2 MB.',
         ]);
+    }
+
+    /**
+     * Save an uploaded profile picture as public/images/avatars/{name}.{ext},
+     * where {name} is the part of the user's email before the @.
+     * Used by store() and update().
+     */
+    private function saveAvatar(User $user, UploadedFile $file): void
+    {
+        // Lowercase extension of the real file type, e.g. "jpg" or "png".
+        $ext = strtolower($file->extension());
+        $dir = public_path(User::AVATAR_DIR);
+
+        if (! is_dir($dir)) {
+            mkdir($dir, 0755, true);
+        }
+
+        // copy() rather than move(): on Windows a rename of the temporary
+        // upload can fail with "Access is denied". PHP deletes the temporary
+        // file itself when the request ends.
+        copy($file->getRealPath(), $dir.'/'.$user->avatarName().'.'.$ext);
+    }
+
+    /**
+     * Delete a user's profile picture, in every accepted type, so an old
+     * mswdo.png cannot keep showing after a new mswdo.jpg is uploaded.
+     * $email lets update() remove the picture saved under the old email.
+     */
+    private function deleteAvatar(User $user, ?string $email = null): void
+    {
+        foreach (User::AVATAR_EXTENSIONS as $ext) {
+            $path = public_path(User::AVATAR_DIR.'/'.$user->avatarName($email).'.'.$ext);
+            if (is_file($path)) {
+                unlink($path);
+            }
+        }
     }
 
     /**
