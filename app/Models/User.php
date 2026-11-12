@@ -34,6 +34,7 @@ class User extends Authenticatable
         'approvals'     => 'Approvals',
         'budget'        => 'Budget Tracking',
         'reports'       => 'Reports',
+        'backup'        => 'Backup',
     ];
 
     /**
@@ -42,7 +43,7 @@ class User extends Authenticatable
      * anything created before the roles table existed.
      */
     public const ROLE_DEFAULTS = [
-        'mswdo_officer' => ['dashboard', 'beneficiaries', 'requests', 'approvals', 'budget', 'reports'],
+        'mswdo_officer' => ['dashboard', 'beneficiaries', 'requests', 'approvals', 'budget', 'reports', 'backup'],
         'mswdo_staff'   => ['dashboard', 'beneficiaries', 'requests', 'approvals', 'reports'],
         'admin'         => [],
     ];
@@ -316,6 +317,7 @@ class User extends Authenticatable
             'approvals'     => 'mswdo.approvals.index',
             'budget'        => 'mswdo.budget.index',
             'reports'       => 'mswdo.reports.index',
+            'backup'        => 'mswdo.backup.index',
         ];
 
         foreach ($this->allowedModules() as $module) {
