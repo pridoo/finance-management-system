@@ -1,6 +1,6 @@
 @extends('mswdo.layouts.app')
-@section('title', 'Add Beneficiary')
-@section('page-title', 'Add Beneficiary')
+@section('title', 'Add Client')
+@section('page-title', 'Add Client')
 
 @section('breadcrumb')
     <a href="{{ route('mswdo.dashboard') }}">Home</a>

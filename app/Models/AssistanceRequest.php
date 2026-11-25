@@ -12,11 +12,14 @@ class AssistanceRequest extends Model
     protected $fillable = [
         'client_id', 'assistance_type', 'amount_requested',
         'purpose', 'submitted_docs', 'status', 'encoded_by',
+        'is_referred', 'is_scholar',
     ];
 
     protected $casts = [
         'amount_requested' => 'decimal:2',
         'submitted_docs'   => 'array',
+        'is_referred'      => 'boolean',
+        'is_scholar'       => 'boolean',
     ];
 
     public function client()

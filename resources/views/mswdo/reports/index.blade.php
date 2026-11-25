@@ -25,9 +25,9 @@
             <input type="date" name="date_to" value="{{ request('date_to') }}" class="form-control">
         </div>
         <div class="min-w-36 flex-1">
-            <label class="form-label">Assistance Type</label>
+            <label class="form-label">Fund Source</label>
             <select name="assistance_type" class="form-control">
-                <option value="">All types ▾</option>
+                <option value="">All fund sources ▾</option>
                 @foreach (['Medical','Burial','Educational','Livelihood'] as $t)
                     <option value="{{ $t }}" @selected(request('assistance_type') === $t)>{{ $t }}</option>
                 @endforeach
@@ -64,7 +64,7 @@
                          record of which range or type it covers. --}}
                     <p data-print-only class="hidden text-xs text-gray-700 mt-1">
                         MSWDO San Agustin ·
-                        {{ request('assistance_type') ?: 'All assistance types' }} ·
+                        {{ request('assistance_type') ?: 'All fund sources' }} ·
                         @if(request('date_from') || request('date_to'))
                             {{ request('date_from') ?: 'start' }} to {{ request('date_to') ?: 'present' }}
                         @else
@@ -222,9 +222,9 @@
 
         {{-- Budget utilization summary --}}
         <div class="panel p-5">
-            <h4 class="panel-title">Budget utilization summary</h4>
+            <h4 class="panel-title">Utilization by funding source</h4>
             <p class="text-xs text-gray-600 mt-1.5 mb-4">
-                Share of each {{ now()->year }} budget already released.
+                Share of each {{ now()->year }} funding source already released.
             </p>
 
             @if($budgetSummary->isNotEmpty())

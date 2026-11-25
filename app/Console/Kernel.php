@@ -12,7 +12,12 @@ class Kernel extends ConsoleKernel
      */
     protected function schedule(Schedule $schedule): void
     {
-        // $schedule->command('inspire')->hourly();
+        // Daily database backup at 5:00 PM Philippine time, saved as .sql in
+        // storage/app/backup. Needs `php artisan schedule:run` every minute
+        // (Windows Task Scheduler / cron); RunDailyBackup covers it otherwise.
+        $schedule->command('backup:database --auto')
+            ->dailyAt('17:00')
+            ->timezone('Asia/Manila');
     }
 
     /**

@@ -65,6 +65,7 @@ class Kernel extends HttpKernel
         'verified' => \Illuminate\Auth\Middleware\EnsureEmailIsVerified::class,
         'admin' => \App\Http\Middleware\EnsureUserIsAdmin::class,
         'module' => \App\Http\Middleware\EnsureModuleAccess::class,
+        'dailybackup' => \App\Http\Middleware\RunDailyBackup::class,
         'notviewonly' => \App\Http\Middleware\EnsureNotViewOnly::class,
         'active' => \App\Http\Middleware\EnsureAccountIsActive::class,
     ];

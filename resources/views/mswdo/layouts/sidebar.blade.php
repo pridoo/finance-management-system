@@ -17,7 +17,7 @@
         <img src="{{ asset('images/sanagustinlogo.png') }}" alt="" class="rail-seal" aria-hidden="true">
         <div class="min-w-0 flex-1">
             <h1 class="truncate text-sm font-extrabold leading-tight text-gray-900">San Agustin-MSWDO</h1>
-            <p class="mt-0.5 text-[11px] font-semibold text-teal-700">v2.0</p>
+            <p class="mt-0.5 text-[11px] font-semibold text-teal-700"></p>
         </div>
         <button type="button" data-sidebar-close
                 class="lg:hidden shrink-0 rounded-lg p-1.5 text-gray-500 hover:bg-gray-100 hover:text-gray-900"
@@ -62,6 +62,7 @@
                     'Funds & records' => [
                         ['route' => 'mswdo.budget.index',        'module' => 'budget',        'label' => 'Budget Tracking',     'icon' => 'M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z'],
                         ['route' => 'mswdo.reports.index',       'module' => 'reports',       'label' => 'Reports',             'icon' => 'M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z'],
+                        ['route' => 'mswdo.backup.index',        'module' => 'backup',        'label' => 'Backup',              'icon' => 'M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4'],
                     ],
                 ];
 
@@ -115,7 +116,13 @@
             ->implode('') ?: mb_strtoupper(mb_substr($me->name, 0, 1));
     @endphp
     <div class="rail-user">
-        <span class="rail-avatar" aria-hidden="true">{{ $initials }}</span>
+        <span class="rail-avatar" style="overflow:hidden" aria-hidden="true">
+            @if($me->avatar_url)
+                <img src="{{ $me->avatar_url }}" alt="" style="width:100%;height:100%;object-fit:cover">
+            @else
+                {{ $initials }}
+            @endif
+        </span>
         <div class="min-w-0 flex-1">
             <p class="truncate text-sm font-bold text-gray-900">{{ $me->name }}</p>
             <p class="truncate text-[11px] font-medium capitalize text-gray-500">

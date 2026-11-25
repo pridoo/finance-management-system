@@ -98,10 +98,9 @@
                 @php
                     $isSelf = $user->is(auth()->user());
 
-                    // An MSWDO officer sees administrator rows but cannot act
-                    // on them. The row still lists so they know the account
-                    // exists; only the buttons are withheld. The controller
-                    // refuses the same actions, so this is presentation.
+                    // Administrator rows are filtered out for an MSWDO officer
+                    // in the controller. This guard stays for an administrator
+                    // looking at another administrator's row.
                     $canManage = auth()->user()->canManage($user);
 
                     $roleLabel = $user->roleLabel();
@@ -129,7 +128,14 @@
                                      status column at the far right. --}}
                                 <span class="grid h-9 w-9 shrink-0 place-items-center rounded-full text-xs font-extrabold
                                              {{ $user->is_active ? 'bg-teal-100 text-teal-800' : 'bg-gray-200 text-gray-500' }}"
-                                      aria-hidden="true">{{ $initials }}</span>
+                                      style="overflow:hidden" aria-hidden="true">
+                                    @if($user->avatar_url)
+                                        <img src="{{ $user->avatar_url }}" alt=""
+                                             style="width:100%;height:100%;object-fit:cover;{{ $user->is_active ? '' : 'filter:grayscale(1);opacity:.6' }}">
+                                    @else
+                                        {{ $initials }}
+                                    @endif
+                                </span>
                                 <span class="font-semibold text-gray-900">
                                     {{ $user->name }}
                                     @if($isSelf)

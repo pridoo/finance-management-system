@@ -14,7 +14,7 @@
      place on every page rather than repeated inside each one. --}}
 <div class="max-w-5xl">
 
-    <form method="POST" action="{{ route('admin.users.update', $user) }}">
+    <form method="POST" action="{{ route('admin.users.update', $user) }}" enctype="multipart/form-data">
         @csrf
         @method('PUT')
         @include('admin.users._form')

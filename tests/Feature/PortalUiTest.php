@@ -55,39 +55,6 @@ class PortalUiTest extends TestCase
         ]);
     }
 
-    public function test_fiscal_year_dropdown_stops_at_the_current_year(): void
-    {
-        $current = (int) now()->year;
-
-        $this->actingAs($this->officer())
-            ->get(route('mswdo.budget.index'))
-            ->assertOk()
-            ->assertSee('<option value="' . $current . '"', false)
-            // A year that has not begun cannot hold a budget, so 2027 must not
-            // appear while it is still 2026.
-            ->assertDontSee('<option value="' . ($current + 1) . '"', false)
-            // Past years stay selectable so previous allocations remain readable.
-            ->assertSee('<option value="' . ($current - 1) . '"', false);
-    }
-
-    public function test_fiscal_year_dropdown_includes_years_that_hold_records(): void
-    {
-        $officer = $this->officer();
-        $past    = (int) now()->year - 3;
-
-        Budget::create([
-            'assistance_type'  => 'Medical',
-            'allocated_amount' => 1000,
-            'fiscal_year'      => $past,
-            'created_by'       => $officer->id,
-        ]);
-
-        $this->actingAs($officer)
-            ->get(route('mswdo.budget.index'))
-            ->assertOk()
-            ->assertSee('<option value="' . $past . '"', false);
-    }
-
     public function test_unknown_fiscal_year_falls_back_to_current_year(): void
     {
         $this->actingAs($this->officer())
@@ -146,12 +113,12 @@ class PortalUiTest extends TestCase
     public function test_detail_endpoint_explains_a_missing_reason(): void
     {
         $officer = $this->officer();
-        $req     = $this->assistanceRequest($officer, 'Approved');
+        $req     = $this->assistanceRequest($officer, 'Rejected');
 
         \App\Models\Approval::create([
             'request_id'  => $req->id,
             'recorded_by' => $officer->id,
-            'decision'    => 'Approved',
+            'decision'    => 'Rejected',
             'remarks'     => null,
             'decided_at'  => now(),
         ]);

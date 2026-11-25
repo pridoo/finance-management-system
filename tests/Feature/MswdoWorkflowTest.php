@@ -70,25 +70,65 @@ class MswdoWorkflowTest extends TestCase
             'created_by' => $officer->id,
         ]);
 
+        // Approving without naming a funding source is refused.
         $this->actingAs($officer)->post(route('mswdo.approvals.store'), [
             'request_id' => $request->id,
             'decision' => 'Approved',
-            'remarks' => 'Complete documents',
+        ])->assertSessionHasErrors('budget_id');
+
+        $this->actingAs($officer)->post(route('mswdo.approvals.store'), [
+            'request_id' => $request->id,
+            'decision' => 'Approved',
+            'budget_id' => $budget->id,
         ])->assertRedirect();
+        $this->assertDatabaseHas('approvals', ['request_id' => $request->id, 'budget_id' => $budget->id]);
 
         $this->actingAs($officer)->put(route('mswdo.approvals.update', $request), [
             'status' => 'For Release',
         ])->assertRedirect();
 
+        // The funding source chosen at approval is used when none is sent.
         $this->actingAs($officer)->put(route('mswdo.approvals.update', $request), [
             'status' => 'Released',
-            'budget_id' => $budget->id,
             'amount_released' => 5000,
             'remarks' => 'Released at cashier',
         ])->assertRedirect();
 
         $this->assertDatabaseHas('assistance_requests', ['id' => $request->id, 'status' => 'Released']);
-        $this->assertDatabaseHas('disbursements', ['request_id' => $request->id, 'amount_released' => 5000]);
+        $this->assertDatabaseHas('disbursements', ['request_id' => $request->id, 'amount_released' => 5000, 'budget_id' => $budget->id]);
+    }
+
+    public function test_staff_can_release_but_cannot_approve(): void
+    {
+        $officer = $this->user();
+        $staff   = User::factory()->create(['role' => 'mswdo_staff']);
+        $request = $this->assistanceRequest($officer);
+        $budget  = Budget::create([
+            'assistance_type' => 'Medical', 'allocated_amount' => 10000,
+            'fiscal_year' => now()->year, 'created_by' => $officer->id,
+        ]);
+
+        // Staff can open Approvals, but the decision is not theirs.
+        $this->actingAs($staff)->get(route('mswdo.approvals.index'))
+            ->assertOk()
+            ->assertSee("Awaiting Officer's decision", false);
+
+        $this->actingAs($staff)->post(route('mswdo.approvals.store'), [
+            'request_id' => $request->id, 'decision' => 'Approved', 'budget_id' => $budget->id,
+        ])->assertForbidden();
+
+        $this->actingAs($officer)->post(route('mswdo.approvals.store'), [
+            'request_id' => $request->id, 'decision' => 'Approved', 'budget_id' => $budget->id,
+        ])->assertRedirect();
+
+        // Once approved, the staff carry out the release.
+        $this->actingAs($staff)->put(route('mswdo.approvals.update', $request), ['status' => 'For Release'])
+            ->assertRedirect();
+        $this->actingAs($staff)->put(route('mswdo.approvals.update', $request), [
+            'status' => 'Released', 'amount_released' => 3000,
+        ])->assertRedirect();
+
+        $this->assertDatabaseHas('disbursements', ['request_id' => $request->id, 'released_by' => $staff->id]);
     }
 
     public function test_release_is_rejected_when_budget_is_insufficient(): void
@@ -138,7 +178,7 @@ class MswdoWorkflowTest extends TestCase
                 'civil_status' => 'Married',
                 'address' => 'Different address',
                 'barangay' => 'Poblacion 2',
-                'contact_number' => null,
+                'contact_number' => '09171112222',
             ])
             ->assertRedirect(route('mswdo.beneficiaries.create'))
             ->assertSessionHas('duplicate_beneficiary', fn ($duplicate) =>
@@ -176,7 +216,7 @@ class MswdoWorkflowTest extends TestCase
         ]);
         $payload = [
             'first_name' => 'Lina', 'last_name' => 'Garcia', 'date_of_birth' => '1975-04-10',
-            'sex' => 'Female', 'civil_status' => 'Married', 'address' => 'New address', 'barangay' => 'Baculud',
+            'sex' => 'Female', 'civil_status' => 'Married', 'address' => 'New address', 'barangay' => 'Baculud', 'contact_number' => '09171112222',
         ];
 
         $this->actingAs($officer)->post(route('mswdo.beneficiaries.store'), $payload)
@@ -205,7 +245,7 @@ class MswdoWorkflowTest extends TestCase
 
         $payload = [
             'first_name' => 'Mario', 'last_name' => 'Cruz', 'date_of_birth' => '1985-12-25',
-            'sex' => 'Male', 'civil_status' => 'Single', 'address' => 'Second', 'barangay' => 'Calao',
+            'sex' => 'Male', 'civil_status' => 'Single', 'address' => 'Second', 'barangay' => 'Calao', 'contact_number' => '09171112222',
         ];
 
         $this->actingAs($officer)->post(route('mswdo.beneficiaries.store'), $payload)

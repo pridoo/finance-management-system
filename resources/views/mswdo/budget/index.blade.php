@@ -12,22 +12,24 @@
             <input type="hidden" name="type" value="{{ $type }}">
         @endif
         <label for="budget-year" class="form-label mb-0! whitespace-nowrap">Fiscal Year</label>
-        {{-- A dropdown rather than a free number field: the years that can hold
-             records are a known list, and typing 2019 into a spinner only ever
-             produced an empty table. --}}
-        <select id="budget-year" name="year" onchange="this.form.submit()"
-                class="form-control w-32 py-1.5! text-lg! font-bold text-teal-800">
-            @foreach ($years as $option)
-                <option value="{{ $option }}" @selected((int) $year === $option)>{{ $option }}</option>
-            @endforeach
-        </select>
-        <noscript><button type="submit" class="btn-soft">Go</button></noscript>
+        {{-- Typed in, starting at the system's first fiscal year. Enter or
+             the button loads it; the arrows step a year at a time. --}}
+        <input type="number" id="budget-year" name="year" value="{{ $year }}"
+               min="{{ $firstYear }}" max="2099" step="1" required inputmode="numeric"
+               onchange="this.form.requestSubmit()"
+               class="form-control w-32 py-1.5! text-lg! font-bold text-teal-800 tabular-nums">
+        <button type="submit" class="btn-soft">Go</button>
     </form>
 @endsection
 
 @section('content')
 
 @php
+    // SPLIT / SUB-ALLOCATIONS — hidden for now. Set to true to bring back the
+    // Split button, the "N parts" line under each fund source, and the Split
+    // dialog. The data, routes and controller methods are untouched.
+    $splitEnabled = false;
+
     $isOfficer = auth()->user()->role === 'mswdo_officer';
 
     // Figures for whatever the page is narrowed to (one type, or all).
@@ -57,7 +59,7 @@
         ]
         : [
             ['label' => 'Annual Fund',          'value' => $fund ? '₱ ' . number_format($fundAmount, 2) : 'Not set', 'tone' => $fund ? 'text-gray-900' : 'text-gray-400', 'rule' => 'from-teal-500 to-teal-600'],
-            ['label' => 'Allocated to Types',   'value' => '₱ ' . number_format($yearAllocated, 2),  'tone' => 'text-gray-900',  'rule' => 'from-teal-400 to-teal-500'],
+            ['label' => 'Allocated to Fund Sources',   'value' => '₱ ' . number_format($yearAllocated, 2),  'tone' => 'text-gray-900',  'rule' => 'from-teal-400 to-teal-500'],
             ['label' => 'Total Released',       'value' => '₱ ' . number_format($yearReleased, 2),   'tone' => 'text-green-700', 'rule' => 'from-green-500 to-green-600'],
             ['label' => 'Remaining to Release', 'value' => '₱ ' . number_format($fundUnreleased, 2), 'tone' => 'text-teal-800',  'rule' => 'from-yellow-400 to-yellow-500'],
         ];
@@ -73,7 +75,7 @@
            @if($active) aria-current="page" @endif
            class="rounded-full border px-4 py-1.5 text-sm font-semibold transition
                   {{ $active ? 'border-teal-700 bg-teal-700 text-white' : 'border-[#ece7dc] bg-white text-gray-700 hover:border-teal-300 hover:bg-teal-50' }}">
-            {{ $option ?? 'All types' }}
+            {{ $option ?? 'All fund sources' }}
         </a>
     @endforeach
 </nav>
@@ -97,7 +99,7 @@
             <div>
                 <p class="text-sm font-bold text-gray-800">{{ $year }} Annual Fund</p>
                 <p class="mt-0.5 text-xs text-gray-600">
-                    Allocations per assistance type are taken out of this fund, and releases are taken out of the allocations.
+                    Each funding source is allocated out of this fund, and releases are taken out of the funding sources.
                 </p>
             </div>
             @if($isOfficer)
@@ -128,7 +130,7 @@
 
         @if(! $fund)
             <p class="mt-3 rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-900">
-                No annual fund has been set for {{ $year }}. Set it first; allocations per assistance type are then drawn from it and can no longer push the year's total past it.
+                No annual fund has been set for {{ $year }}. Set it first; funding sources are then drawn from it and can no longer push the year's total past it.
             </p>
         @elseif($fundUnreleased > 0)
             <p class="mt-3 rounded-lg {{ $yearOver ? 'bg-red-50 text-red-900' : 'bg-amber-50 text-amber-900' }} px-4 py-3 text-sm">
@@ -146,6 +148,59 @@
     </div>
 @endunless
 
+{{-- Utilization: one donut per assistance type, showing how much of its
+     allocation has been released. Replaces the thin bar that used to sit in a
+     column of the table below — four charts side by side compare at a glance,
+     a column of hairline bars did not. Each card narrows the page to its type. --}}
+@php
+    $circumference = 2 * M_PI * 48;
+@endphp
+<div class="panel mb-5 p-5" data-utilization>
+    <h3 class="panel-title mb-4">Utilization by Funding Source</h3>
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        @foreach ($type ? [$type] : $types as $cardType)
+            @php
+                $b         = $allBudgets->firstWhere('assistance_type', $cardType);
+                $cAlloc    = $b ? (float) $b->allocated_amount : 0;
+                $cReleased = $b ? (float) $b->total_released : 0;
+                $cPct      = $cAlloc > 0 ? min(100, ($cReleased / $cAlloc) * 100) : 0;
+                // A real but tiny release still shows as a sliver, never as 0.
+                $arc       = $cPct > 0 ? max(1.5, $cPct) / 100 * $circumference : 0;
+                $stroke    = $cPct >= 90 ? '#ef4444' : ($cPct >= 70 ? '#eab308' : '#16a34a');
+                $label     = $cPct > 0 && $cPct < 1 ? '<1' : (string) round($cPct);
+            @endphp
+            <a href="{{ route('mswdo.budget.index', ['year' => $year, 'type' => $cardType]) }}"
+               class="flex flex-col items-center rounded-2xl border border-[#ece7dc] bg-white p-4 text-center transition hover:border-teal-300 hover:shadow-md
+                      {{ $type === $cardType ? 'ring-2 ring-teal-600' : '' }}">
+                <svg viewBox="0 0 120 120" class="h-32 w-32" role="img"
+                     aria-label="{{ $cardType }}: {{ $label }}% of the allocation released">
+                    <circle cx="60" cy="60" r="48" fill="none" stroke="#f1f5f9" stroke-width="14"/>
+                    @if ($arc > 0)
+                        <circle cx="60" cy="60" r="48" fill="none" stroke="{{ $stroke }}" stroke-width="14"
+                                stroke-linecap="round" transform="rotate(-90 60 60)"
+                                stroke-dasharray="{{ round($arc, 2) }} {{ round($circumference, 2) }}"/>
+                    @endif
+                    <text x="60" y="58" text-anchor="middle" font-size="22" font-weight="800" fill="#111827">{{ $label }}%</text>
+                    <text x="60" y="76" text-anchor="middle" font-size="10" font-weight="600" fill="#6b7280">released</text>
+                </svg>
+                <p class="mt-2 text-base font-bold text-gray-900">{{ $cardType }}</p>
+                @if ($b)
+                    <p class="mt-0.5 text-xs text-gray-600 tabular-nums">
+                        ₱ {{ number_format($cReleased, 2) }} of ₱ {{ number_format($cAlloc, 2) }}
+                    </p>
+                @else
+                    <p class="mt-0.5 text-xs text-gray-400">No fund source for {{ $year }}</p>
+                @endif
+            </a>
+        @endforeach
+    </div>
+    <div class="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-gray-100 pt-3 text-[11px] font-semibold text-gray-600">
+        <span class="flex items-center gap-1.5"><span class="inline-block h-2.5 w-2.5 rounded-full bg-[#16a34a]"></span> Below 70%</span>
+        <span class="flex items-center gap-1.5"><span class="inline-block h-2.5 w-2.5 rounded-full bg-[#eab308]"></span> 70–89%</span>
+        <span class="flex items-center gap-1.5"><span class="inline-block h-2.5 w-2.5 rounded-full bg-[#ef4444]"></span> 90% and up</span>
+    </div>
+</div>
+
 {{-- The table now runs the full width. Squeezed into two thirds it could not
      fit its own action column, and the Delete button was cut off the edge. --}}
 <div>
@@ -153,14 +208,14 @@
     {{-- Budget allocation table --}}
     <div class="panel">
         <div class="panel-head">
-            <h3 class="panel-title">Budget Allocation per Assistance Type</h3>
+            <h3 class="panel-title">Funding Sources</h3>
             <div class="flex flex-wrap items-center gap-3">
                 @if(auth()->user()->role === 'mswdo_officer')
                     <button type="button" data-budget-add class="btn-primary shrink-0 py-2.5">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
                         </svg>
-                        Add Allocation
+                        Add Fund Source
                     </button>
                 @endif
             </div>
@@ -172,12 +227,11 @@
         <table class="w-full text-sm">
             <thead class="bg-gray-50 text-xs text-gray-500 uppercase tracking-wide">
                 <tr>
-                    <th class="px-5 py-3 text-left">Type</th>
-                    <th class="px-5 py-3 text-left">Allocated (₱)</th>
-                    <th class="px-5 py-3 text-left">Released (₱)</th>
-                    <th class="px-5 py-3 text-left">Balance (₱)</th>
-                    <th class="px-5 py-3 text-left">Utilization</th>
-                    <th class="px-5 py-3 text-right">Action</th>
+                    <th class="px-5 py-3 text-left w-[16%]">Fund Source</th>
+                    <th class="px-5 py-3 text-right w-[17%]">Allocated (₱)</th>
+                    <th class="px-5 py-3 text-right w-[17%]">Released (₱)</th>
+                    <th class="px-5 py-3 text-right w-[17%]">Balance (₱)</th>
+                    <th class="pl-10 pr-5 py-3 text-right">Action</th>
                 </tr>
             </thead>
             <tbody class="divide-y divide-gray-100">
@@ -192,7 +246,7 @@
                                  Split dialog: five budgets each with their own
                                  expanded panel buried the table this page is
                                  actually for. --}}
-                            @if ($budget->subAllocations->isNotEmpty())
+                            @if ($splitEnabled && $budget->subAllocations->isNotEmpty())
                                 <p class="mt-0.5 truncate text-xs text-gray-500" title="{{ $budget->subAllocations->pluck('label')->join(', ') }}">
                                     {{ $budget->subAllocations->count() }}
                                     {{ Str::plural('part', $budget->subAllocations->count()) }}:
@@ -200,23 +254,10 @@
                                 </p>
                             @endif
                         </td>
-                        <td class="px-5 py-3.5 text-gray-800 tabular-nums">{{ number_format($budget->allocated_amount, 2) }}</td>
-                        <td class="px-5 py-3.5 font-semibold text-green-700 tabular-nums">{{ number_format($budget->total_released, 2) }}</td>
-                        <td class="px-5 py-3.5 font-semibold tabular-nums {{ $budget->remaining_balance < 0 ? 'text-red-700' : 'text-gray-800' }}">
+                        <td class="px-5 py-3.5 text-right text-gray-800 tabular-nums">{{ number_format($budget->allocated_amount, 2) }}</td>
+                        <td class="px-5 py-3.5 text-right font-semibold text-green-700 tabular-nums">{{ number_format($budget->total_released, 2) }}</td>
+                        <td class="px-5 py-3.5 text-right font-semibold tabular-nums {{ $budget->remaining_balance < 0 ? 'text-red-700' : 'text-gray-800' }}">
                             {{ number_format($budget->remaining_balance, 2) }}
-                        </td>
-                        <td class="px-5 py-3.5 w-40">
-                            @php $pct = $budget->allocated_amount > 0 ? min(100, round(($budget->total_released / $budget->allocated_amount) * 100)) : 0; @endphp
-                            <div class="flex items-center gap-2">
-                                {{-- Thicker than the old 1.5px hairline, which
-                                     was hard to read at a glance and vanished
-                                     entirely at low percentages. --}}
-                                <div class="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
-                                    <div class="h-2 rounded-full transition-all {{ $pct >= 90 ? 'bg-red-500' : ($pct >= 70 ? 'bg-yellow-400' : 'bg-teal-600') }}"
-                                         style="width:{{ $pct }}%"></div>
-                                </div>
-                                <span class="w-9 shrink-0 text-xs font-bold tabular-nums {{ $pct >= 90 ? 'text-red-700' : 'text-gray-700' }}">{{ $pct }}%</span>
-                            </div>
                         </td>
                         <td class="px-5 py-3.5">
                             {{-- Available to every role: reading where the money
@@ -231,7 +272,9 @@
                                 </button>
 
                                 {{-- Reading the split is not officer-only, same
-                                     reasoning as Releases above. --}}
+                                     reasoning as Releases above. Hidden while
+                                     $splitEnabled is false. --}}
+                                @if ($splitEnabled)
                                 <button type="button"
                                         data-budget-split="{{ $budget->id }}"
                                         class="btn-soft-plain">
@@ -243,6 +286,7 @@
                                         </span>
                                     @endif
                                 </button>
+                                @endif
 
                                 @if(auth()->user()->role === 'mswdo_officer')
                                     <button type="button"
@@ -260,16 +304,16 @@
                                     @if($budget->total_released <= 0)
                                         <form method="POST" action="{{ route('mswdo.budget.destroy', $budget) }}"
                                               data-swal-confirm="danger"
-                                              data-swal-name="the {{ $budget->assistance_type }} {{ $budget->fiscal_year }} allocation">
+                                              data-swal-name="the {{ $budget->assistance_type }} {{ $budget->fiscal_year }} fund source">
                                             @csrf
                                             @method('DELETE')
-                                            <button type="submit" class="btn-soft-danger"><svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>Delete</button>
+                                            <button type="submit" class="btn-soft-danger w-28 justify-center"><svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>Delete</button>
                                         </form>
                                     @else
                                         {{-- Deleting would orphan the release
                                              records that reference it. --}}
-                                        <span class="inline-flex items-center rounded-lg border border-gray-100 bg-gray-50 px-3 py-2 text-xs font-medium text-gray-400"
-                                              title="This allocation has released funds and can no longer be deleted.">In use</span>
+                                        <span class="inline-flex w-28 justify-center items-center self-stretch rounded-lg border border-gray-100 bg-gray-50 px-3 text-sm font-medium text-gray-400"
+                                              title="This funding source has released funds and can no longer be deleted.">In use</span>
                                     @endif
                                 @endif
                             </div>
@@ -278,15 +322,15 @@
 
                 @empty
                     <tr>
-                        <td colspan="6">
+                        <td colspan="5">
                             <div class="empty-state">
                                 <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
                                           d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
                                 </svg>
-                                <p>No {{ $type ? $type . ' ' : '' }}budget allocation recorded for {{ $year }}.</p>
+                                <p>No {{ $type ? $type . ' ' : '' }}funding source recorded for {{ $year }}.</p>
                                 @if(auth()->user()->role === 'mswdo_officer')
-                                    <button type="button" data-budget-add class="btn-primary mt-1">Add the first allocation</button>
+                                    <button type="button" data-budget-add class="btn-primary mt-1">Add the first fund source</button>
                                 @endif
                             </div>
                         </td>
@@ -313,7 +357,7 @@
                     <tr>
                         <th class="px-5 py-3 text-left">Date Released</th>
                         <th class="px-5 py-3 text-left">Beneficiary</th>
-                        <th class="px-5 py-3 text-left">Type</th>
+                        <th class="px-5 py-3 text-left">Fund Source</th>
                         <th class="px-5 py-3 text-right">Amount (₱)</th>
                         <th class="px-5 py-3 text-left">Released By</th>
                     </tr>
@@ -355,8 +399,9 @@
 
 {{-- One split panel per budget, kept out of the table and opened on demand.
      Rendered as templates rather than fetched, since the data is already on
-     the page and a split is read far more often than it is edited. --}}
-@foreach ($budgets as $budget)
+     the page and a split is read far more often than it is edited.
+     Not rendered while $splitEnabled is false. --}}
+@foreach ($splitEnabled ? $budgets : [] as $budget)
     <template id="tpl-budget-split-{{ $budget->id }}">
         <div class="text-left">
             @php
@@ -472,19 +517,19 @@
             <p class="mb-4 rounded-lg bg-teal-50 px-4 py-3 text-sm text-teal-900">
                 This amount is <b>taken out of</b> the {{ $year }} fund.
                 <b>₱ {{ number_format($fundUnallocated, 2) }}</b> is still free to allocate.
-                If the type already has an allocation, the amount is added to it.
+                If this fund source already exists, the amount is added to it.
             </p>
         @else
             <p class="mb-4 rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-900">
-                Set the annual fund for the year first — allocations are drawn from it.
+                Set the annual fund for the year first — funding sources are drawn from it.
             </p>
         @endif
         <div class="mb-4">
             <label for="add-type" class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-600">
-                Assistance Type <span class="text-red-500">*</span>
+                Fund Source <span class="text-red-500">*</span>
             </label>
             <select id="add-type" class="swal2-input" style="margin:0;width:100%">
-                <option value="">— Select type —</option>
+                <option value="">— Select fund source —</option>
                 @foreach (['Medical','Burial','Educational','Livelihood'] as $t)
                     <option value="{{ $t }}">{{ $t }}</option>
                 @endforeach
@@ -501,11 +546,8 @@
             <label for="add-year" class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-600">
                 Fiscal Year <span class="text-red-500">*</span>
             </label>
-            <select id="add-year" class="swal2-input" style="margin:0;width:100%">
-                @foreach ($years as $option)
-                    <option value="{{ $option }}" @selected((int) $year === $option)>{{ $option }}</option>
-                @endforeach
-            </select>
+            <input id="add-year" type="number" min="{{ $firstYear }}" max="2099" step="1"
+                   value="{{ $year }}" class="swal2-input" style="margin:0;width:100%">
         </div>
     </div>
 </template>
@@ -585,11 +627,11 @@
 
         try {
             var result = await Swal.fire({
-                title: 'Add Budget Allocation',
+                title: 'Add Fund Source',
                 html: bodyFrom('tpl-budget-add'),
                 width: 560,
                 showCancelButton: true,
-                confirmButtonText: 'Save allocation',
+                confirmButtonText: 'Save fund source',
                 cancelButtonText: 'Cancel',
                 confirmButtonColor: '#15803d',
                 cancelButtonColor: '#64748b',
@@ -602,17 +644,22 @@
                     var amount = parseFloat(document.getElementById('add-amount').value);
 
                     if (!type) {
-                        Swal.showValidationMessage('Select an assistance type.');
+                        Swal.showValidationMessage('Select a fund source.');
                         return false;
                     }
                     if (isNaN(amount) || amount < 1) {
                         Swal.showValidationMessage('Enter an amount of at least ₱1.00.');
                         return false;
                     }
+                    var fiscalYear = parseInt(document.getElementById('add-year').value, 10);
+                    if (isNaN(fiscalYear) || fiscalYear < {{ $firstYear }} || fiscalYear > 2099) {
+                        Swal.showValidationMessage('Enter a fiscal year from {{ $firstYear }} onward.');
+                        return false;
+                    }
                     return {
                         assistance_type: type,
                         allocated_amount: amount,
-                        fiscal_year: document.getElementById('add-year').value,
+                        fiscal_year: fiscalYear,
                     };
                 },
             });
@@ -644,7 +691,7 @@
                 title: escapeHtml(info.year) + ' Annual Fund',
                 html:
                     '<p class="mb-3 text-left text-sm text-gray-600">The whole assistance fund for FY ' +
-                    escapeHtml(info.year) + '. Allocations per assistance type are taken out of it.</p>' +
+                    escapeHtml(info.year) + '. Funding sources are allocated out of it.</p>' +
                     (allocated > 0
                         ? '<p class="mb-3 text-left text-xs text-gray-500">Already allocated: <b>' +
                           peso(allocated.toFixed(2)) + '</b> — the fund cannot be lower than this.</p>'
@@ -754,7 +801,7 @@
 
             var body;
             if (!data.releases.length) {
-                body = '<p class="py-6 text-sm text-gray-500">No funds have been released from this allocation yet.</p>';
+                body = '<p class="py-6 text-sm text-gray-500">No funds have been released from this funding source yet.</p>';
             } else {
                 body =
                     '<div class="max-h-72 overflow-y-auto rounded-lg border border-gray-200">' +
@@ -810,14 +857,14 @@
 
         try {
             var result = await Swal.fire({
-                title: 'Edit ' + escapeHtml(info.type) + ' allocation',
+                title: 'Edit ' + escapeHtml(info.type) + ' fund source',
                 // Unlike the Add form, which tops up, this sets the figure
                 // outright. Spelling that out prevents the amount being
                 // doubled by someone expecting the other behaviour.
                 html:
-                    '<p class="mb-3 text-left text-sm text-gray-600">This <b>replaces</b> the allocation for ' +
+                    '<p class="mb-3 text-left text-sm text-gray-600">This <b>replaces</b> the amount of ' +
                     escapeHtml(info.type) + ' FY ' + escapeHtml(info.year) +
-                    '. To add funds instead, use the Add Budget Allocation form.</p>' +
+                    '. To add funds instead, use Add Fund Source.</p>' +
                     '<p class="mb-3 text-left text-xs text-gray-500">Already released: <b>' +
                     peso(released.toFixed(2)) + '</b> — the new amount cannot be lower than this.</p>' +
                     '<input id="swal-allocation" type="number" step="0.01" min="' + released +

@@ -43,7 +43,13 @@
         @endphp
         <details class="relative" data-user-menu>
             <summary class="icon-btn list-none cursor-pointer" aria-haspopup="menu">
-                <span class="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-gradient-to-br from-teal-600 to-teal-700 text-xs font-extrabold text-white" aria-hidden="true">{{ $initials }}</span>
+                <span class="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-gradient-to-br from-teal-600 to-teal-700 text-xs font-extrabold text-white" style="overflow:hidden" aria-hidden="true">
+                    @if($me->avatar_url)
+                        <img src="{{ $me->avatar_url }}" alt="" style="width:100%;height:100%;object-fit:cover">
+                    @else
+                        {{ $initials }}
+                    @endif
+                </span>
                 <span class="hidden max-w-32 truncate sm:inline">{{ $me->name }}</span>
                 <svg class="h-4 w-4 shrink-0 text-gray-400" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24" aria-hidden="true">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/>

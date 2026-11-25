@@ -102,7 +102,8 @@ class DashboardYearTest extends TestCase
     public function test_the_year_picker_switches_the_figures(): void
     {
         $officer = $this->officer();
-        $past    = (int) now()->year - 1;
+        // The system starts at 2026, so the "other" year is the next one.
+        $past    = (int) now()->year + 1;
 
         $current = $this->budget($officer, (int) now()->year, 1000);
         $old     = $this->budget($officer, $past, 500000);
@@ -124,18 +125,35 @@ class DashboardYearTest extends TestCase
         $this->assertSame(250000.0, (float) $response->viewData('releasedTotal'));
     }
 
-    public function test_the_picker_offers_past_years_but_not_the_next_one(): void
+    public function test_the_year_is_typed_and_starts_at_the_first_fiscal_year(): void
     {
-        $current = (int) now()->year;
+        $this->actingAs($this->officer())
+            ->get(route('mswdo.dashboard', ['year' => 2025]))
+            ->assertOk()
+            ->assertViewHas('year', 2026)
+            ->assertSee('type="number" id="dash-year"', false)
+            ->assertSee('min="2026"', false);
+    }
 
-        $years = $this->actingAs($this->officer())
+    public function test_breakdown_by_funding_source_and_daily_processed_counts(): void
+    {
+        $officer = $this->officer();
+        $budget  = $this->budget($officer, (int) now()->year, 100000);
+        $this->releasedRequest($officer, $budget, 4000, now()->toDateTimeString());
+
+        $response = $this->actingAs($officer)
             ->get(route('mswdo.dashboard'))
             ->assertOk()
-            ->viewData('years');
+            ->assertSee('Breakdown by Funding Source')
+            ->assertSee('Daily Processed Requests');
 
-        $this->assertContains($current, $years);
-        $this->assertContains($current - 1, $years);
-        $this->assertNotContains($current + 1, $years, 'A year that has not begun holds no budget.');
+        $row = $response->viewData('fundBreakdown')->firstWhere('type', 'Educational');
+        $this->assertSame(1, $row['recipients']);
+        $this->assertEquals(4000, $row['released']);
+
+        $today = $response->viewData('dailyProcessed')->last();
+        $this->assertSame(1, $today['released']);
+        $this->assertSame(1, $today['filed']);
     }
 
     public function test_an_unknown_year_falls_back_to_the_current_one(): void
